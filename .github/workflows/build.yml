@@ -36,5 +36,6 @@ jobs:
             WHISPER_NATIVE=OFF
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: What to paste into ZimaOS
-        run: echo "image: ${{ steps.name.outputs.image }}:latest" >> "$GITHUB_STEP_SUMMARY"
+            - name: What to paste into ZimaOS
+        run: |
+          echo "image ${{ steps.name.outputs.image }}:latest" >> "$GITHUB_STEP_SUMMARY""
