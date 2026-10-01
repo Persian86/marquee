@@ -21,21 +21,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Image name
-        id: name
-        run: echo "image=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/marquee" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64
           push: true
-          tags: |
-            ${{ steps.name.outputs.image }}:latest
-            ${{ steps.name.outputs.image }}:${{ github.sha }}
-          build-args: |
-            WHISPER_NATIVE=OFF
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-            - name: What to paste into ZimaOS
-        run: |
-          echo "image ${{ steps.name.outputs.image }}:latest" >> "$GITHUB_STEP_SUMMARY""
+          tags: ghcr.io/persian86/marquee:latest
+          build-args: WHISPER_NATIVE=OFF
