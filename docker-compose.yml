@@ -15,10 +15,10 @@ services:
     volumes:
       - /DATA/AppData/marquee/config:/config
       - /DATA/AppData/marquee/transcode:/transcode
-      - "/DATA/MediaStorage/PlexMedia/Movies:/movies:ro"
-      - "/DATA/MediaStorage/PlexMedia/Tv Shows:/tv:ro"
-      - "/DATA/MediaStorage/PlexMedia/Zoey Movies:/zoey-movies:ro"
-      - "/DATA/MediaStorage/PlexMedia/Zoey Tv Shows:/zoey-tv:ro"
+      - "/DATA/MediaStorage/PlexMedia/Movies:/media/movies:ro"
+      - "/DATA/MediaStorage/PlexMedia/Tv Shows:/media/tv:ro"
+      - "/DATA/MediaStorage/PlexMedia/Zoey Movies:/media/zoey-movies:ro"
+      - "/DATA/MediaStorage/PlexMedia/Zoey Tv Shows:/media/zoey-tv:ro"
     x-casaos:
       ports:
         - container: "8420"
