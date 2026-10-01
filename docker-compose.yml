@@ -13,15 +13,12 @@ services:
     environment:
       TZ: Australia/Melbourne
       # Intel GPU transcoding. Set to "none" if the app logs say the GPU isn't working.
-      HWACCEL: vaapi
+      HWACCEL: none
       # How many streams can be converted at once
       MAX_TRANSCODES: "3"
       # Minutes between automatic library scans
       SCAN_INTERVAL_MIN: "30"
-    devices:
-      # Gives the app the Intel graphics chip. Delete these two lines if your box has no /dev/dri.
-      - /dev/dri:/dev/dri
-    volumes:
+    Volumes:
       - /DATA/AppData/marquee/config:/config
       - /DATA/AppData/marquee/transcode:/transcode
       # Your media — change the left side to wherever your files live. ":ro" = Marquee can never change them.
