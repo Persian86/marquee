@@ -1,0 +1,22 @@
+{
+  "name": "marquee",
+  "version": "1.0.0",
+  "description": "Personal media server for ZimaOS",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.22.3",
+    "fast-xml-parser": "^4.5.7",
+    "hls.js": "^1.7.3",
+    "web-push": "^3.6.7"
+  },
+  "private": true,
+  "optionalDependencies": {
+    "@vladmandic/face-api": "1.7.15",
+    "@tensorflow/tfjs": "4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "4.22.0"
+  }
+}
