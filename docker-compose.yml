@@ -3,7 +3,7 @@ services:
   marquee:
     # Built by GitHub (see the guide): change YOUR-GITHUB-NAME to your GitHub user name, in lower case.
     # Building on the box over SSH instead? Use:  image: marquee:latest
-    image: ghcr.io/YOUR-GITHUB-NAME/marquee:latest
+    image: ghcr.io/persian86/marquee:latest
     container_name: marquee
     restart: unless-stopped
     ports:
@@ -25,8 +25,10 @@ services:
       - /DATA/AppData/marquee/config:/config
       - /DATA/AppData/marquee/transcode:/transcode
       # Your media — change the left side to wherever your files live. ":ro" = Marquee can never change them.
-      - /DATA/Media/Movies:/media/movies:ro
-      - "/DATA/Media/TV Shows:/media/tv:ro"
+      - "/DATA/MediaStorage/PlexMedia/Movies:/media/Movies:ro"
+      - "/DATA/MediaStorage/PlexMedia/Tv Shows:/media/Tv-Shows:ro"
+      - "/DATA/MediaStorage/PlexMedia/Zoey Movies:/media/Zoey-Movies:ro"
+      - "/DATA/MediaStorage/PlexMedia/Zoey Tv Shows:/media/Zoey-Tv-Shows:ro"
       # Optional extra libraries — delete any line you don't need, or change the left side
       - /DATA/Media/Music:/media/music:ro
       - /DATA/Media/Photos:/media/photos:ro
