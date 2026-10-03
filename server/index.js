@@ -106,6 +106,7 @@ scanner.onScanComplete(async added => {
   trickplay.run();
   require('./features/aisubs').autoQueue(added);
   require('./features/faces').run().catch(e => console.warn('Faces failed:', e.message));
+  try { require('./group-shows').run(); } catch (e) { console.warn('Season grouping failed:', e.message); }
 });
 
 seedLibraries();
@@ -114,7 +115,8 @@ const DAY = 1000 * 60 * 60 * 24;
 db.prepare('DELETE FROM sessions WHERE last_seen < ?').run(Date.now() - DAY * 365);
 db.prepare('DELETE FROM sessions WHERE guest = 1 AND created_at < ?').run(Date.now() - DAY * 30);
 app.listen(config.PORT, '0.0.0.0', () => {
-  console.log(`Marquee running on http://0.0.0.0:${config.PORT}  (hwaccel: ${config.HWACCEL})`);
+  console.log(`Marquee running on http://0.0.0.0:${config.PORT}  (hwaccel: ${config.HWACCEL}, season-group)`);
+  try { require('./group-shows').run(); } catch (e) { console.warn('Season grouping failed:', e.message); }
   setTimeout(scanner.scanAll, 2000);
   if (config.SCAN_INTERVAL_MIN > 0) setInterval(scanner.scanAll, config.SCAN_INTERVAL_MIN * 60000).unref();
   admin.restartWatcher();
