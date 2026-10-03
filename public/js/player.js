@@ -107,7 +107,7 @@ ROUTES.play = async id => {
     audioIndex: 0, subKey: store.get('mq_subs_on', null), burnKey: null, subCache: {}, track: null, loadingSeq: 0, loading: false,
     lastSaved: 0, closed: false, upnextShown: false, menu: null, dragging: false, introSkipped: false, warned: false,
     stalls: [], stallStart: 0, loadedAt: 0, lastUpCheck: 0, cast: null, room: null, remoteAt: 0, clockOffset: 0, members: [],
-    night: store.get('mq_night', false), audioCtx: null, trick: null, recapSkipped: false,
+    night: store.get('mq_night', false), audioCtx: null, trick: null, recapSkipped: false, rate: store.get('mq_rate', 1) || 1, sleepTimer: null, sleepAt: 0,
   };
   const clientId = deviceId + '-' + Math.random().toString(36).slice(2, 7);
 
@@ -192,7 +192,7 @@ ROUTES.play = async id => {
       if (S.auto && !S.quality) S.quality = await autoQuality();
       let info;
       try {
-        info = await api(`/api/play/${id}`, { body: { quality: S.quality, caps: deviceCaps(), audioIndex: S.audioIndex, start, deviceId, subKey: S.burnKey, forceStream: !!S.forceHls, night: S.night && nightOnServer() } });
+        info = await api(`/api/play/${id}`, { body: { quality: S.quality, caps: deviceCaps(), audioIndex: S.audioIndex, start, deviceId, subKey: S.burnKey, forceStream: !!S.forceHls, forceTranscode: !!S.forceTranscode, night: S.night && nightOnServer() } });
       } catch (e) {
         if (e.status === 403) return blocked(e.message, e.data?.code);
         throw e;
@@ -214,11 +214,13 @@ ROUTES.play = async id => {
         const hls = new Hls({ startPosition: 0, maxBufferLength: 40, maxMaxBufferLength: 120, backBufferLength: 120,
           manifestLoadingTimeOut: 60000, manifestLoadingMaxRetry: 2, fragLoadingTimeOut: 60000, levelLoadingTimeOut: 60000 });
         S.hls = hls;
+        let mediaRecoveries = 0;
         hls.on(Hls.Events.ERROR, (_, d) => {
           if (!d.fatal) return;
-          if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+          if (d.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries++ < 1) hls.recoverMediaError();
+          else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) failover(d.details);
           else if (d.type === Hls.ErrorTypes.NETWORK_ERROR && !S.netRetry) { S.netRetry = true; setTimeout(() => load(cur(), !video.paused), 1000); }
-          else showError('The stream stopped unexpectedly.');
+          else failover(d.details || 'The stream stopped unexpectedly.');
         });
         hls.loadSource(info.url);
         hls.attachMedia(video);
@@ -229,9 +231,31 @@ ROUTES.play = async id => {
     S.stalls = [];
     applySubs();
     if (S.night || S.audioCtx) applyNight();
+    video.playbackRate = S.rate || 1;
     if (autoplay) video.play().catch(() => { busy(false); paint(); });
     setTimeout(() => { S.loading = false; }, 600);
     mediaSession();
+  }
+
+  // When this device can't play what it was sent, try the next-safest way before giving up:
+  // original file → streamed copy → fully converted → lower quality.
+  function failover(detail) {
+    if (S.closed) return;
+    const again = note => { if (note) toast(note, 3500); return load(cur(), true).catch(() => showError('This device couldn’t play the file.')); };
+    if (offlineMode) return showError('This download couldn’t be played.');
+    if (S.mode === 'direct' && !S.forceHls) { S.forceHls = true; return again(); }
+    if (!S.forceTranscode) {
+      S.forceTranscode = true;
+      if (!S.quality || S.quality === 'original') S.quality = '1080';
+      return again('Converting this one for your device…');
+    }
+    if (!S.steppedDown) {
+      S.steppedDown = true; S.auto = false;
+      S.quality = S.quality === '480' || S.quality === '360' ? '360' : S.quality === '720' ? '480' : '720';
+      return again('Trying a lower quality…');
+    }
+    console.warn('Playback failed:', detail);
+    showError('This device couldn’t play this video, even after converting it. Try again, or try another device.');
   }
 
   function showError(msg) {
@@ -373,8 +397,7 @@ ROUTES.play = async id => {
   });
   video.addEventListener('error', () => {
     if (!video.error || !S.mode || S.closed) return;
-    if (S.mode === 'direct' && !offlineMode && !S.forceHls) { S.forceHls = true; return load(cur(), true).catch(() => showError('This device couldn’t play the file.')); }
-    showError(video.error.message || 'Playback error');
+    failover(video.error.message || 'Playback error');
   });
 
   // ---------- controls visibility ----------
@@ -490,8 +513,15 @@ ROUTES.play = async id => {
         : `<button data-p="start">${ICON.users} Start a watch party</button>`}
       ${me?.sections?.subtitles ? '<button data-p="findsubs">Find subtitles online…</button>' : ''}
       <h4>Sound</h4><button data-p="night" class="${S.night ? 'on' : ''}">Night mode <small>quieter bangs, clearer voices</small></button>
+      <h4>Speed</h4>
+      ${[0.75, 1, 1.25, 1.5, 2].map(r => `<button data-rate="${r}" class="${(S.rate || 1) === r ? 'on' : ''}">${r === 1 ? 'Normal' : r + '×'}</button>`).join('')}
+      <h4>Sleep</h4>
+      <button data-sleep="0" class="${!S.sleepAt ? 'on' : ''}">Off</button>
+      ${[15, 30, 45, 60].map(m => `<button data-sleep="${m}">${m} min</button>`).join('')}
+      ${(i.chapters || []).length ? `<h4>Chapters</h4>${i.chapters.map(c => `<button data-ch="${c.start}">${esc(c.title || fmtTime(c.start))}</button>`).join('')}` : ''}
       <h4>More</h4><button data-p="send">${ICON.cast} Play on another device…</button>
       ${!me?.isKids ? `<button data-p="autoskip" class="${me?.autoSkipIntro ? 'on' : ''}">Skip intros & recaps automatically</button>` : ''}
+      ${me?.isAdmin && S.item?.type === 'episode' ? `<button data-p="markintro">Intro ends here</button><button data-p="markseason">Use this intro for the season</button><button data-p="markcredits">Credits start here</button>` : ''}
       ${i.maxQuality ? `<p class="pm-note">This profile is limited to ${i.maxQuality}p.</p>` : ''}
       <p class="pm-note">${i.prepared ? 'Playing a prepared copy — no converting needed' : i.mode === 'direct' ? 'Playing the original file' : i.transcoding ? `Converting on the fly (${esc(i.reason)})` : 'Repackaging without re-encoding'}</p>`;
     m.addEventListener('click', e => e.stopPropagation());
@@ -527,12 +557,32 @@ ROUTES.play = async id => {
         if (nightOnServer()) load(cur(), !paused()); else applyNight();
       }
       if (a === 'findsubs') findSubtitles();
+      if (a === 'markintro' || a === 'markseason' || a === 'markcredits') {
+        const body = a === 'markcredits' ? { creditsStart: cur() } : { introEnd: cur(), applySeason: a === 'markseason' };
+        try { await api(`/api/items/${id}/markers`, { body }); toast(a === 'markcredits' ? 'Credits marked' : a === 'markseason' ? 'Intro saved for this season' : 'Intro marked'); } catch (e) { toast(e.message); }
+      }
       if (a === 'send') Devices.pick('Continue on…', async dev => {
         await api(`/api/devices/${dev.clientId}/command`, { body: { type: 'open', itemId: S.item.id, position: cur() } });
         video.pause(); toast(`Now playing on ${dev.name}`);
       });
       if (a === 'autoskip') { const v = !me.autoSkipIntro; await api('/api/me', { method: 'PATCH', body: { autoSkipIntro: v } }); me.autoSkipIntro = v; toast(v ? 'Intros will be skipped automatically' : 'Auto-skip turned off'); }
     });
+    $$('[data-rate]', m).forEach(b => b.onclick = () => {
+      S.rate = +b.dataset.rate || 1;
+      video.playbackRate = S.rate;
+      store.set('mq_rate', S.rate);
+      closeMenu();
+      toast(S.rate === 1 ? 'Normal speed' : `Playing at ${S.rate}×`);
+    });
+    $$('[data-sleep]', m).forEach(b => b.onclick = () => {
+      clearTimeout(S.sleepTimer);
+      const mins = +b.dataset.sleep || 0;
+      S.sleepAt = mins ? Date.now() + mins * 60000 : 0;
+      if (mins) S.sleepTimer = setTimeout(() => { video.pause(); toast('Sleep timer — paused'); }, mins * 60000);
+      closeMenu();
+      toast(mins ? `Sleep timer: ${mins} min` : 'Sleep timer off');
+    });
+    $$('[data-ch]', m).forEach(b => b.onclick = () => { closeMenu(); seek(+b.dataset.ch); });
   };
 
   // ---------- subtitles from OpenSubtitles ----------

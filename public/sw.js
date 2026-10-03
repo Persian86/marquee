@@ -1,5 +1,5 @@
 // Marquee service worker: instant app start, offline downloads, push notifications.
-const SHELL_CACHE = 'marquee-shell-v5';
+const SHELL_CACHE = 'marquee-shell-v10';
 const DL_CACHE = 'marquee-downloads';
 const SHELL = ['/', '/index.html', '/styles.css', '/js/core.js', '/js/media.js', '/js/downloads.js', '/js/pages.js', '/js/player.js', '/js/admin.js', '/js/extras.js', '/js/boot.js',
   '/vendor/hls.min.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png'];

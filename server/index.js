@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
-const { db } = require('./db');
+const { db, refreshDups } = require('./db');
 const C = require('./common');
 const scanner = require('./scanner');
 const tmdb = require('./tmdb');
@@ -38,6 +38,9 @@ app.options('/cast/:token/:file', (req, res) => res.set({ 'Access-Control-Allow-
 app.get('/cast/:token/video.mp4', cast.serveMedia);
 app.get('/cast/:token/subs.vtt', C.wrap(cast.serveSubs));
 
+// Keep the "which copy of a film to show" answers fresh (a no-op unless the library changed)
+const background = require('./features/background');
+app.use(['/api', '/ext/v1', '/img'], (req, res, next) => { if (!/^\/(devices|status|notifications)/.test(req.path)) background.touch(); next(); });
 app.use('/ext/v1', require('./routes/ext').router); // other apps (FamilyNest, widgets, voice) — app-key sign-in
 app.use('/api', core.router);              // includes sign-in; everything after this needs a session
 app.use('/api', library.router);
@@ -93,6 +96,7 @@ function seedLibraries() {
 
 // After each scan: find intros, announce new arrivals, finish any restore, tidy prepared copies
 scanner.onScanComplete(async added => {
+  try { refreshDups(true); } catch (e) { console.warn('refreshDups:', e.message); }
   backup.applyPending();
   notify.onNewItems(added, C.visibleTo).catch(e => console.warn('Notify failed:', e.message));
   requests.checkArrivals().catch(() => {});
@@ -105,7 +109,10 @@ scanner.onScanComplete(async added => {
 });
 
 seedLibraries();
-db.prepare('DELETE FROM sessions WHERE last_seen < ?').run(Date.now() - 1000 * 60 * 60 * 24 * 365);
+try { refreshDups(true); } catch (e) { console.warn('refreshDups:', e.message); }
+const DAY = 1000 * 60 * 60 * 24;
+db.prepare('DELETE FROM sessions WHERE last_seen < ?').run(Date.now() - DAY * 365);
+db.prepare('DELETE FROM sessions WHERE guest = 1 AND created_at < ?').run(Date.now() - DAY * 30);
 app.listen(config.PORT, '0.0.0.0', () => {
   console.log(`Marquee running on http://0.0.0.0:${config.PORT}  (hwaccel: ${config.HWACCEL})`);
   setTimeout(scanner.scanAll, 2000);

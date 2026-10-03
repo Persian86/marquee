@@ -1,7 +1,7 @@
 // Scrub previews: little thumbnails every few seconds, packed into sprite sheets (like Jellyfin's "trickplay").
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const bg = require('./background');
 const { db, getSetting } = require('../db');
 const { CONFIG_DIR } = require('../config');
 
@@ -22,7 +22,7 @@ function generate(item) {
     fs.rmSync(out, { recursive: true, force: true });
     fs.mkdirSync(out, { recursive: true });
     // Decoding keyframes only makes this quick even for long films
-    const proc = spawn('nice', ['-n', '19', 'ffmpeg', '-v', 'error', '-nostdin', '-skip_frame', 'nokey', '-i', item.path, '-an', '-sn', '-dn',
+    const proc = bg.spawnLow('ffmpeg', ['-v', 'error', '-nostdin', '-skip_frame', 'nokey', '-i', item.path, '-an', '-sn', '-dn',
       '-vf', `fps=1/${interval},scale=${WIDTH}:${height},tile=${COLS}x${ROWS}`, '-q:v', '6', '-fps_mode', 'vfr', path.join(out, '%03d.jpg')], { stdio: 'ignore' });
     const timer = setTimeout(() => proc.kill('SIGKILL'), 30 * 60000);
     proc.on('close', code => {
@@ -50,8 +50,10 @@ async function run() {
     status.total = items.length; status.done = 0;
     for (const it of items) {
       if (!enabled()) break;
+      await bg.idle(); // never while someone is watching or browsing
+      if (!enabled()) break;
       status.current = it.id;
-      if (fs.existsSync(it.path)) await generate(it);
+      if (fs.existsSync(it.path)) await bg.turn(() => generate(it));
       status.done++;
     }
   } finally {

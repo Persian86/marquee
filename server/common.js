@@ -1,6 +1,6 @@
 // Shared helpers used by all route files.
 const crypto = require('crypto');
-const { db } = require('./db');
+const { db, refreshDups } = require('./db');
 
 const now = () => Date.now();
 const COLORS = ['#f0b429', '#e0533d', '#3d9be0', '#45b36b', '#a65fd9', '#e05d9b', '#22b5b0', '#f07c2a'];
@@ -28,9 +28,11 @@ function createSession(res, profileId, req = null, { guest = false, deviceId = n
   const ip = req ? String(req.ip || '').replace(/^::ffff:/, '') : null;
   db.prepare('INSERT INTO sessions(token, profile_id, created_at, last_seen, guest, ip, ua, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .run(token, profileId, now(), now(), guest ? 1 : 0, ip, req ? String(req.headers['user-agent'] || '').slice(0, 300) : null, deviceId);
-  // Over https the cookie is marked Secure so it's never sent over plain http
+  // Over https the cookie is marked Secure so it's never sent over plain http.
+  // Guest invite sessions expire in 30 days; family sessions last a year and are dropped after a year of silence.
   const secure = req && (req.secure || req.headers['x-forwarded-proto'] === 'https') ? '; Secure' : '';
-  const cookie = `mq_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 365}${secure}`;
+  const maxAge = guest ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 365;
+  const cookie = `mq_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
   const prev = res.getHeader('Set-Cookie');
   res.setHeader('Set-Cookie', prev ? [].concat(prev, cookie) : cookie);
   return token;
@@ -68,8 +70,8 @@ function visible(profile, levelExpr = 'i.level', l = 'l') {
 // Hide lower-quality duplicates of the same film (same TMDB match in two places)
 const SAME_FILM = `(d.type = 'movie' AND d.id != i.id AND ((i.tmdb_id IS NOT NULL AND d.tmdb_id = i.tmdb_id)
   OR (i.tmdb_id IS NULL AND d.tmdb_id IS NULL AND LOWER(d.title) = LOWER(i.title) AND d.year IS i.year)))`;
-const NOT_DUP = `NOT EXISTS (SELECT 1 FROM items d WHERE ${SAME_FILM}
-  AND (COALESCE(d.height, 0) > COALESCE(i.height, 0) OR (COALESCE(d.height, 0) = COALESCE(i.height, 0) AND (COALESCE(d.size, 0) > COALESCE(i.size, 0) OR (COALESCE(d.size, 0) = COALESCE(i.size, 0) AND d.id < i.id)))))`;
+// Precomputed in db.js (refreshDups) — a plain column check instead of comparing every film with every other one
+const NOT_DUP = 'i.hidden_dup = 0';
 
 function formatItem(r) {
   if (!r) return null;
@@ -88,6 +90,16 @@ function formatItem(r) {
   if (r.episode_count != null) out.episodeCount = r.episode_count;
   if (r.unwatched != null) out.unwatched = r.unwatched;
   if (r.in_list != null) out.inList = !!r.in_list;
+  return out;
+}
+
+// Just what a poster in a grid needs — big libraries were sending every movie's full description to the phone
+function formatCard(r) {
+  if (!r) return null;
+  const out = { id: r.id, type: r.type, title: r.title, year: r.year, poster: img(r.poster), addedAt: r.added_at };
+  if (r.position != null || r.watched != null) out.progress = { position: r.position || 0, watched: !!r.watched, duration: r.pduration || r.duration };
+  if (r.episode_count != null) out.episodeCount = r.episode_count;
+  if (r.unwatched != null) out.unwatched = r.unwatched;
   return out;
 }
 
@@ -119,17 +131,17 @@ function visibleTo(profile, id) {
   return !!r && canSee(profile, r);
 }
 
-function showList(profile, where = '1=1', order = 'i.sort_title', limit = 5000, params = []) {
+function showList(profile, where = '1=1', order = 'i.sort_title', limit = 5000, params = [], fmt = formatItem) {
   return db.prepare(`SELECT i.*,
       (SELECT COUNT(*) FROM items e WHERE e.parent_id = i.id) AS episode_count,
       (SELECT COUNT(*) FROM items e WHERE e.parent_id = i.id AND NOT EXISTS
         (SELECT 1 FROM progress p WHERE p.item_id = e.id AND p.profile_id = ? AND p.watched = 1)) AS unwatched
     FROM items i JOIN libraries l ON l.id = i.library_id
-    WHERE i.type = 'show' AND ${visible(profile)} AND ${where} ORDER BY ${order} LIMIT ${limit | 0}`).all(profile.id, ...params).map(formatItem);
+    WHERE i.type = 'show' AND ${visible(profile)} AND ${where} ORDER BY ${order} LIMIT ${limit | 0}`).all(profile.id, ...params).map(fmt);
 }
-function movieList(profile, where = '1=1', order = 'i.sort_title', limit = 5000, params = []) {
+function movieList(profile, where = '1=1', order = 'i.sort_title', limit = 5000, params = [], fmt = formatItem) {
   return db.prepare(`SELECT i.*, ${PROGRESS_COLS} FROM items i JOIN libraries l ON l.id = i.library_id ${PROGRESS_JOIN}
-    WHERE i.type = 'movie' AND ${visible(profile)} AND ${NOT_DUP} AND ${where} ORDER BY ${order} LIMIT ${limit | 0}`).all(profile.id, ...params).map(formatItem);
+    WHERE i.type = 'movie' AND ${visible(profile)} AND ${NOT_DUP} AND ${where} ORDER BY ${order} LIMIT ${limit | 0}`).all(profile.id, ...params).map(fmt);
 }
 // Mixed movies + shows by id list, keeping order
 function itemsByIds(profile, ids) {
@@ -156,6 +168,6 @@ function capQuality(profile, q) {
 }
 
 module.exports = {
-  profileLibs, capQuality, QUALITY_ORDER, now, COLORS, hashPin, checkPin, parseCookies, createSession, img, publicProfile, visible, NOT_DUP, SAME_FILM, formatItem,
+  profileLibs, capQuality, QUALITY_ORDER, now, COLORS, hashPin, checkPin, parseCookies, createSession, img, publicProfile, visible, NOT_DUP, SAME_FILM, formatItem, formatCard,
   PROGRESS_JOIN, PROGRESS_COLS, EP_ORDER, getVisibleItem, canSee, visibleTo, showList, movieList, itemsByIds, wrap,
 };

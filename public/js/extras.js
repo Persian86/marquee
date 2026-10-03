@@ -445,7 +445,7 @@ async function loadExtrasPanels() {
       <div class="list-item"><div class="grow"><div class="t">Morning “On this day” notification</div><div class="s">When there are photos or home videos from this date in earlier years</div></div>${hours('xMemHour', s.memoriesHour)}${sw('xMem', s.memoriesNotify)}</div></div>
 
     <div class="panel"><h2>Space saver</h2>
-      <p class="hint">Overnight, re-encodes big older-format videos to HEVC — usually <b>40–50% smaller</b> with no visible difference. It pauses whenever someone is watching, checks every new file before swapping it in, and keeps the original in a hidden folder for ${s.spaceSaverKeepDays} days in case you want it back.</p>
+      <p class="hint">Overnight, re-encodes big older-format videos to HEVC — usually <b>40–50% smaller</b> with no visible difference. It replaces files in the folders you made writable, pauses whenever someone is watching, checks every new file before swapping it in, and keeps the original in a hidden <b>.marquee-originals</b> folder for ${s.spaceSaverKeepDays} days. Leave this off unless you mean to rewrite those files.</p>
       ${ss.readOnly.length ? `<div class="st-banner off" style="margin-bottom:12px">${ICON.lock}<div><b>Some media folders are read-only</b><span>Space saver can only work where Marquee may write. In docker-compose.yml remove <b>:ro</b> from: ${ss.readOnly.map(esc).join(', ')}</span></div></div>` : ''}
       <div class="stats" style="margin:4px 0 12px"><div class="stat"><b>${fmtBytes(ss.potentialBytes)}</b><span>could be saved (${ss.candidates} files)</span></div><div class="stat"><b>${fmtBytes(ss.savedBytes)}</b><span>saved so far</span></div></div>
       <div class="list-item"><div class="grow"><div class="t">Run overnight</div><div class="s">${ss.running ? (ss.paused || `Working on ${esc(ss.current?.title || '…')}`) : ss.paused || (ss.hw ? 'Uses the graphics chip — quick' : 'Uses the processor — slower, but fine overnight')}</div></div>${sw('xSs', s.spaceSaver)}</div>
@@ -492,7 +492,13 @@ async function loadExtrasPanels() {
   on('xTrailers', t => put({ cinemaTrailers: +t.value }));
   on('xMem', t => put({ memoriesNotify: t.checked }));
   on('xMemHour', t => put({ memoriesHour: +t.value }));
-  on('xSs', t => put({ spaceSaver: t.checked }));
+  on('xSs', t => {
+    if (t.checked && !confirm('Space saver will replace video files in the writable media folders, overnight. Originals are kept for a few days. Turn it on?')) {
+      t.checked = false;
+      return;
+    }
+    put({ spaceSaver: t.checked });
+  });
   on('xSsStart', t => put({ spaceSaverStart: +t.value }));
   on('xSsEnd', t => put({ spaceSaverEnd: +t.value }));
   on('xSsMin', t => put({ spaceSaverMinGb: +t.value }));

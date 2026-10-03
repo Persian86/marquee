@@ -253,7 +253,7 @@ function adminPanels(o) {
     </div>
 
     <div class="panel">
-      <h2>Backups</h2><p class="hint">Profiles, PINs, watch history, My Lists, family lists and settings — not your media files. A backup is also saved automatically every night (last 7 kept).</p>
+      <h2>Backups</h2><p class="hint">Profiles, PINs, watch history, My Lists, family lists and settings — not your media files. Artwork you uploaded, scrub previews, downloaded subtitles and face names live next to the database and are not inside this file. A backup is also saved automatically every night (last 7 kept).</p>
       <div class="btn-row"><a class="btn small primary" href="/api/admin/backup" download>${ICON.download} Download backup</a>
         <label class="btn small">Restore from file…<input type="file" accept=".json,application/json" id="restoreFile" hidden></label></div>
       ${o.backups.length ? `<div class="list" style="margin-top:10px">${o.backups.map(b => `<div class="list-item"><div class="grow"><div class="t">${esc(b.name)}</div><div class="s">${fmtBytes(b.size)}</div></div><a class="btn small" href="/api/admin/backups/${encodeURIComponent(b.name)}" download>${ICON.download}</a></div>`).join('')}</div>` : ''}

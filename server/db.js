@@ -417,6 +417,48 @@ CREATE TABLE IF NOT EXISTS app_tokens (
 );
 `);
 
+// ---- speed: which copy of a film is the one to show ----
+// Checking "is there a better copy of this film?" for every movie on every screen got slow with big libraries,
+// so the answer is stored on each row (hidden_dup) and refreshed only when the library actually changes.
+ensureColumns('items', { hidden_dup: 'INTEGER NOT NULL DEFAULT 0', scan_key: 'TEXT' });
+db.exec(`
+PRAGMA synchronous = NORMAL;
+PRAGMA cache_size = -64000;
+PRAGMA temp_store = MEMORY;
+CREATE TABLE IF NOT EXISTS flags (key TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0);
+INSERT OR IGNORE INTO flags (key, value) VALUES ('dups_dirty', 1);
+CREATE TRIGGER IF NOT EXISTS trg_dups_ins AFTER INSERT ON items WHEN NEW.type IN ('movie','show')
+  BEGIN UPDATE flags SET value = 1 WHERE key = 'dups_dirty' AND value = 0; END;
+CREATE TRIGGER IF NOT EXISTS trg_dups_del AFTER DELETE ON items WHEN OLD.type IN ('movie','show')
+  BEGIN UPDATE flags SET value = 1 WHERE key = 'dups_dirty' AND value = 0; END;
+CREATE TRIGGER IF NOT EXISTS trg_dups_upd AFTER UPDATE OF tmdb_id, title, year, height, size, type ON items WHEN NEW.type IN ('movie','show')
+  BEGIN UPDATE flags SET value = 1 WHERE key = 'dups_dirty' AND value = 0; END;
+CREATE INDEX IF NOT EXISTS idx_items_type_added ON items(type, added_at);
+CREATE INDEX IF NOT EXISTS idx_items_scan_key ON items(library_id, scan_key);
+CREATE INDEX IF NOT EXISTS idx_items_type_sort ON items(type, sort_title);
+CREATE INDEX IF NOT EXISTS idx_progress_profile ON progress(profile_id, updated_at);
+`);
+const dupsDirty = db.prepare("SELECT value FROM flags WHERE key = 'dups_dirty'");
+// Best copy = highest resolution, then biggest file, then first added. Everything else of the same film is hidden from grids.
+let dupsAt = 0;
+function refreshDups(force = false) {
+  if (!dupsDirty.get()?.value) return;
+  // During a big scan the library changes constantly; refreshing every few seconds is plenty
+  if (!force && Date.now() - dupsAt < 5000) return;
+  dupsAt = Date.now();
+  db.exec(`
+    BEGIN;
+    UPDATE flags SET value = 0 WHERE key = 'dups_dirty';
+    UPDATE items SET hidden_dup = 0 WHERE hidden_dup != 0;
+    UPDATE items SET hidden_dup = 1 WHERE id IN (
+      SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY type, CASE WHEN tmdb_id IS NOT NULL THEN 't' || tmdb_id ELSE 'n' || LOWER(title) || '|' || COALESCE(year, '') END
+          ORDER BY COALESCE(height, 0) DESC, COALESCE(size, 0) DESC, id) AS rn
+        FROM items WHERE type IN ('movie','show'))
+      WHERE rn > 1);
+    COMMIT;`);
+}
+
 function getSetting(key, fallback = null) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   return row ? row.value : fallback;
@@ -429,4 +471,4 @@ function setSetting(key, value) {
 // Server secret used for signed cast links
 if (!getSetting('secret')) setSetting('secret', require('crypto').randomBytes(32).toString('hex'));
 
-module.exports = { db, getSetting, setSetting };
+module.exports = { db, getSetting, setSetting, refreshDups };

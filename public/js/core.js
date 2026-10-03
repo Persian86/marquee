@@ -105,6 +105,27 @@ function fallbackArt(title, sub) {
   return `<div class="fallback" style="background:linear-gradient(160deg,hsl(${h} 42% 30%),hsl(${(h + 40) % 360} 48% 12%))">${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
 }
 
+// ---------- big grids ----------
+// Drawing thousands of posters at once makes phones crawl, so grids start with a screenful and add more as you scroll.
+function growGrid(grid, items, render, first = 90, step = 120) {
+  if (!grid) return;
+  let shown = Math.min(first, items.length);
+  grid.innerHTML = items.slice(0, shown).map(render).join('');
+  if (shown >= items.length) return;
+  const more = document.createElement('div');
+  more.className = 'grid-more';
+  grid.after(more);
+  const add = () => {
+    if (!more.isConnected) return io.disconnect();
+    const next = Math.min(items.length, shown + step);
+    grid.insertAdjacentHTML('beforeend', items.slice(shown, next).map(render).join(''));
+    shown = next;
+    if (shown >= items.length) { io.disconnect(); more.remove(); }
+  };
+  const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) add(); }, { rootMargin: '1200px 0px' });
+  io.observe(more);
+}
+
 // ---------- cards ----------
 function posterCard(item) {
   if (item.type === 'home') return wideCard(item);
@@ -228,6 +249,7 @@ function confirmTwice(btn, label) {
 }
 
 // ---------- router ----------
+const KIDS_BLOCKED = ['settings', 'activity', 'duplicates', 'search', 'notifications', 'requests'];
 async function route() {
   cleanups.splice(0).forEach(fn => { try { fn(); } catch {} });
   const hash = location.hash || '#/';
@@ -248,7 +270,7 @@ async function route() {
       catch { return go('#/who', true); }
     }
     const handler = ROUTES[parts[0] || ''] || ROUTES[''];
-    if (me?.isKids && ['settings', 'activity', 'duplicates', 'search', 'notifications', 'requests'].includes(parts[0])) return go('#/', true);
+    if (me?.isKids && KIDS_BLOCKED.includes(parts[0])) { toast('That’s for grown-ups — switch to a grown-up profile to open it'); return go('#/', true); }
     await handler(...parts.slice(1));
   } catch (e) {
     if (e.message === 'Signed out') return;

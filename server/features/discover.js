@@ -24,7 +24,7 @@ function features(id) {
 function candidates(profile) {
   const rows = db.prepare(`SELECT i.id, i.type, i.genres, i.collection_id, i.vote FROM items i JOIN libraries l ON l.id = i.library_id
     LEFT JOIN progress pr ON pr.item_id = i.id AND pr.profile_id = ?
-    WHERE i.type IN ('movie','show') AND ${visible(profile)} AND ${C.NOT_DUP.replace(/d\.type = 'movie'/g, "d.type = i.type")}
+    WHERE i.type IN ('movie','show') AND ${visible(profile)} AND ${C.NOT_DUP}
       AND COALESCE(pr.watched, 0) = 0`).all(profile.id);
   const credits = db.prepare("SELECT item_id, person_id, role FROM credits WHERE role != 'cast' OR ord < 10").all();
   const byItem = new Map();

@@ -90,13 +90,98 @@ function findArt(dir, names) {
 const now = () => Date.now();
 const hash = s => crypto.createHash('sha1').update(s).digest('hex').slice(0, 20);
 
-function upsertShow(lib, folderKey, rawName) {
-  const show = db.prepare("SELECT * FROM items WHERE library_id = ? AND type = 'show' AND folder_key = ?").get(lib.id, folderKey);
-  if (show) return show.id;
-  const { title, year } = parse.parseTitleYear(rawName);
-  const r = db.prepare(`INSERT INTO items (library_id, type, folder_key, title, sort_title, year, added_at)
-    VALUES (?, 'show', ?, ?, ?, ?, ?)`).run(lib.id, folderKey, title, parse.sortTitle(title), year, now());
+// One show per name, however its folders are laid out: "Bluey/Season 1", "Bluey Season 2", "Bluey.S03.1080p" and
+// loose "Bluey S04E01.mkv" files all land in the same show. show = { name, key, folder } from parse.showFromPath.
+function upsertShow(lib, show) {
+  let found = db.prepare("SELECT id, folder_key FROM items WHERE library_id = ? AND type = 'show' AND scan_key = ? ORDER BY id LIMIT 1").get(lib.id, show.key);
+  if (!found) {
+    // "Bluey (2018)" and plain "Bluey Season 2" are the same show — unless there are two different years to choose from
+    const bare = show.key.replace(/ \(\d{4}\)$/, '');
+    const near = db.prepare("SELECT id, folder_key, scan_key FROM items WHERE library_id = ? AND type = 'show' AND (scan_key = ? OR scan_key GLOB ?) ORDER BY id")
+      .all(lib.id, bare, bare + ' ([0-9][0-9][0-9][0-9])');
+    if (near.length === 1 && (bare === show.key || near[0].scan_key === bare)) found = near[0];
+  }
+  if (found) {
+    // Learn the show's own folder (for poster.jpg, theme.mp3, tvshow.nfo) if we only knew season folders before
+    if (show.folder && found.folder_key.startsWith('~')) db.prepare('UPDATE items SET folder_key = ? WHERE id = ?').run(show.folder, found.id);
+    return found.id;
+  }
+  const { title, year } = parse.parseTitleYear(show.name);
+  const r = db.prepare(`INSERT INTO items (library_id, type, folder_key, scan_key, title, sort_title, year, added_at)
+    VALUES (?, 'show', ?, ?, ?, ?, ?, ?)`).run(lib.id, show.folder || '~' + show.key, show.key, title, parse.sortTitle(title), year, now());
   return Number(r.lastInsertRowid);
+}
+
+// Things that point at a show (My List, lists, ratings) follow it when two shows are merged
+function moveShowLinks(fromId, toId) {
+  for (const t of ['watchlist', 'list_items', 'ratings']) {
+    db.prepare(`UPDATE OR IGNORE ${t} SET item_id = ? WHERE item_id = ?`).run(toId, fromId);
+    db.prepare(`DELETE FROM ${t} WHERE item_id = ?`).run(fromId);
+  }
+}
+
+// Libraries scanned before Marquee understood season folders: put every episode under the right show.
+function regroupShows(lib) {
+  const eps = db.prepare("SELECT id, path, parent_id, season, episode, title, tmdb_id FROM items WHERE library_id = ? AND type = 'episode'").all(lib.id);
+  if (!eps.length) return;
+  const cache = new Map();
+  let moved = 0;
+  db.exec('BEGIN');
+  try {
+    for (const e of eps) {
+      const rel = path.relative(lib.path, e.path);
+      if (rel.startsWith('..')) continue;
+      const show = parse.showFromPath(rel.split(path.sep));
+      let target = cache.get(show.key + '\u0000' + (show.folder || ''));
+      if (!target) { target = upsertShow(lib, show); cache.set(show.key + '\u0000' + (show.folder || ''), target); }
+      // Season/episode numbers that only the folder name could tell us
+      if (e.episode == null || !e.season) {
+        const ep = parse.parseEpisode(rel);
+        if (ep && (ep.season !== e.season || ep.episode !== e.episode)) db.prepare('UPDATE items SET season = ?, episode = ? WHERE id = ?').run(ep.season, ep.episode, e.id);
+      }
+      // "Episode 1" → the real name, when the file name has one ("01 - Pups Make a Splash.mkv")
+      if (/^Episode \d+$/.test(e.title) && !e.tmdb_id) {
+        const t = parse.episodeTitleFromName(path.basename(e.path));
+        if (t) db.prepare('UPDATE items SET title = ?, sort_title = ? WHERE id = ?').run(t, t.toLowerCase(), e.id);
+      }
+      if (target !== e.parent_id) {
+        db.prepare('UPDATE items SET parent_id = ? WHERE id = ?').run(target, e.id);
+        moveShowLinks(e.parent_id, target);
+        moved++;
+      }
+    }
+    db.exec('COMMIT');
+  } catch (err) { db.exec('ROLLBACK'); throw err; }
+  if (moved) {
+    db.prepare(`DELETE FROM items WHERE library_id = ? AND type = 'show' AND NOT EXISTS (SELECT 1 FROM items e WHERE e.parent_id = items.id)`).run(lib.id);
+    console.log(`Regrouped ${moved} episode(s) in ${lib.name} into their shows`);
+  }
+}
+
+function mergeShowInto(fromId, toId) {
+  db.prepare('UPDATE items SET parent_id = ? WHERE parent_id = ?').run(toId, fromId);
+  moveShowLinks(fromId, toId);
+  db.prepare('DELETE FROM items WHERE id = ?').run(fromId);
+}
+
+// "Bluey" (from season folders) and "Bluey (2018)" are one show, as long as there's only one year to choose from
+function mergeNearShows(lib) {
+  const bare = db.prepare("SELECT id, scan_key FROM items WHERE library_id = ? AND type = 'show' AND scan_key IS NOT NULL AND scan_key NOT GLOB '* ([0-9][0-9][0-9][0-9])'").all(lib.id);
+  for (const b of bare) {
+    const dated = db.prepare("SELECT id FROM items WHERE library_id = ? AND type = 'show' AND scan_key GLOB ?").all(lib.id, b.scan_key + ' ([0-9][0-9][0-9][0-9])');
+    if (dated.length === 1) mergeShowInto(b.id, dated[0].id);
+  }
+}
+
+// After matching, two folders can turn out to be the same show ("Dr Who" and "Doctor Who (2005)") — merge them.
+function mergeMatchedShows() {
+  const groups = db.prepare(`SELECT library_id, tmdb_id, MIN(id) AS keep, COUNT(*) AS n FROM items
+    WHERE type = 'show' AND tmdb_id IS NOT NULL GROUP BY library_id, tmdb_id HAVING n > 1`).all();
+  for (const g of groups) {
+    const others = db.prepare("SELECT id FROM items WHERE type = 'show' AND library_id = ? AND tmdb_id = ? AND id != ?").all(g.library_id, g.tmdb_id, g.keep);
+    for (const o of others) mergeShowInto(o.id, g.keep);
+  }
+  if (groups.length) console.log(`Merged ${groups.length} show(s) that were split across folders`);
 }
 
 function insertItem(cols) {
@@ -133,6 +218,23 @@ async function scanLibrary(lib) {
   const files = walk(lib.path, ACCEPT[lib.type] || ACCEPT.movie);
   const perDir = {};
   for (const f of files) perDir[path.dirname(f)] = (perDir[path.dirname(f)] || 0) + 1;
+
+  if (lib.type === 'tv') {
+    // Shows made by an older version have no key yet: give them one, then fix any grouping
+    for (const s of db.prepare("SELECT id, folder_key, title, year, locked FROM items WHERE library_id = ? AND type = 'show' AND scan_key IS NULL").all(lib.id)) {
+      const raw = s.folder_key && !s.folder_key.startsWith('~') ? path.basename(s.folder_key) : s.folder_key ? s.folder_key.slice(1) : s.title;
+      const name = parse.stripSeason(raw);
+      db.prepare('UPDATE items SET scan_key = ? WHERE id = ?').run(parse.showKey(name), s.id);
+      if (name !== raw) {
+        // It was named after one season's folder ("Bluey Season 1"): it now holds the whole show, so name and look it up properly
+        const { title, year } = parse.parseTitleYear(name);
+        const keepTitle = /title/.test(s.locked || '');
+        db.prepare(`UPDATE items SET folder_key = ?, tmdb_id = NULL, metadata_done = 0 ${keepTitle ? '' : ', title = ?, sort_title = ?, year = ?'} WHERE id = ?`)
+          .run(...['~' + parse.showKey(name), ...(keepTitle ? [] : [title, parse.sortTitle(title), year]), s.id]);
+      }
+    }
+    try { regroupShows(lib); mergeNearShows(lib); } catch (e) { console.warn('Regrouping shows failed:', e.message); }
+  }
 
   const seen = new Set();
   status.phase = 'Reading files';
@@ -190,14 +292,7 @@ async function scanLibrary(lib) {
       insertItem({ library_id: lib.id, type: 'movie', folder_key: rel, title, sort_title: parse.sortTitle(title), year, edition, path: file, ...probeCols, added_at: now() });
     } else if (lib.type === 'tv') {
       const ep = parse.parseEpisode(rel);
-      let showFolder, showName;
-      if (parts.length > 1) { showFolder = parts[0]; showName = parts[0]; }
-      else {
-        const m = path.basename(file).match(/^(.*?)[\s._-]*(?:[Ss]\d{1,2}[Ee]\d|\d{1,2}x\d{2})/);
-        showName = m && m[1] ? m[1] : path.basename(file, path.extname(file));
-        showFolder = '~' + parse.parseTitleYear(showName).title.toLowerCase();
-      }
-      const showId = upsertShow(lib, showFolder, showName);
+      const showId = upsertShow(lib, parse.showFromPath(parts));
       const epTitle = parse.episodeTitleFromName(path.basename(file)) ||
         (ep ? `Episode ${ep.episode}` : parse.parseTitleYear(path.basename(file)).title);
       insertItem({ library_id: lib.id, type: 'episode', parent_id: showId, title: epTitle, sort_title: epTitle.toLowerCase(),
@@ -407,6 +502,7 @@ async function scanAll() {
       try { await scanLibrary(lib); } catch (e) { status.lastError = e.message; }
     }
     await fetchMetadata();
+    try { mergeMatchedShows(); } catch (e) { console.warn('Merging shows failed:', e.message); }
   } catch (e) {
     status.lastError = e.message;
     console.error('Scan failed:', e);

@@ -95,7 +95,7 @@ async function run() {
     for (const item of todo) {
       if (!enabled()) break;
       // Leave the processor to video when someone's watching
-      while (busyStreaming()) await new Promise(r => setTimeout(r, 15000));
+      await require('./background').idle();
       status.current = item.title;
       try {
         if (fs.existsSync(item.path)) {

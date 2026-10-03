@@ -188,8 +188,9 @@ async function pageLibrary(kind) {
       <a class="chip ${unwatched ? 'on' : ''}" href="${link({ unwatched: unwatched ? '' : '1' })}">Unwatched</a>
       <span class="count">${items.length} ${kind === 'movies' ? (items.length === 1 ? 'movie' : 'movies') : (items.length === 1 ? 'show' : 'shows')}</span>
     </div>
-    ${items.length ? `<div class="grid">${items.map(posterCard).join('')}</div>` : emptyView('', 'Nothing here', genre || unwatched ? 'Try clearing the filters.' : 'No titles found for this profile yet.')}
+    ${items.length ? `<div class="grid" id="libGrid"></div>` : emptyView('', 'Nothing here', genre || unwatched ? 'Try clearing the filters.' : 'No titles found for this profile yet.')}
   </div>`;
+  growGrid($('#libGrid'), items, posterCard);
   $('#sort').onchange = e => { store.set(`mq_sort_${kind}`, e.target.value); go(link({ sort: e.target.value }), true); };
 }
 ROUTES.movies = () => pageLibrary('movies');
@@ -587,7 +588,10 @@ ROUTES.more = async () => {
     ['#/ask', ICON.search, 'Ask Marquee'], !me.guest && ['#/shares', ICON.share, 'Shared links'],
     ['#/wrapped', ICON.star || ICON.pulse, 'Your year'], ['#/notifications', ICON.bell, "What's new"],
     me.isAdmin && ['#/activity', ICON.pulse, 'Activity'], ['#/settings', ICON.settings, 'Settings'],
-  ].filter(Boolean);
+  ].filter(Boolean)
+    // Kids profiles can't open these, so don't show them (they used to bounce back to Home with no explanation)
+    .filter(([h]) => !me.isKids || !KIDS_BLOCKED.includes(h.slice(2)));
+  if (me.isKids) tiles.push(['#/who', ICON.users, 'Switch profile']);
   shell('more', `<div class="page"><h1 class="page-title">More</h1>
     <div class="tiles">${tiles.map(([h, i, l]) => `<a class="tile" href="${h}">${i}<span>${l}</span></a>`).join('')}</div></div>`);
 };

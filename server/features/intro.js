@@ -1,6 +1,7 @@
 // Finds TV intros by matching the audio fingerprint of neighbouring episodes in a season.
 // Chapters named "Intro"/"Opening"/"Credits" are used first when the file has them.
 const { spawn, execFileSync } = require('child_process');
+const bg = require('./background');
 const { db } = require('../db');
 
 const POINT = 0.1238;          // seconds per chromaprint point
@@ -14,7 +15,7 @@ const status = { running: false, done: 0, total: 0 };
 
 function fingerprint(file, seconds, offset = 0) {
   return new Promise(resolve => {
-    const p = spawn('ffmpeg', ['-v', 'error', ...(offset > 0 ? ['-ss', String(offset)] : []), '-t', String(seconds), '-i', file, '-vn', '-sn', '-ac', '1', '-f', 'chromaprint', '-fp_format', 'raw', '-'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const p = bg.spawnLow('ffmpeg', ['-v', 'error', ...(offset > 0 ? ['-ss', String(offset)] : []), '-t', String(seconds), '-i', file, '-vn', '-sn', '-ac', '1', '-f', 'chromaprint', '-fp_format', 'raw', '-'], { stdio: ['ignore', 'pipe', 'ignore'] });
     const chunks = [];
     p.stdout.on('data', d => chunks.push(d));
     const timer = setTimeout(() => p.kill('SIGKILL'), 180000);
@@ -122,6 +123,7 @@ async function detectAll() {
     const seasons = db.prepare(`SELECT DISTINCT parent_id, season FROM items WHERE type = 'episode' AND intro_done = 0`).all();
     status.total = seasons.length; status.done = 0;
     for (const s of seasons) {
+      await bg.idle(); // never while someone is watching or browsing
       status.done++;
       const eps = db.prepare(`SELECT id, path, duration, probe, intro_done FROM items WHERE type = 'episode' AND parent_id = ? AND season IS ?
         ORDER BY episode, sort_title`).all(s.parent_id, s.season);

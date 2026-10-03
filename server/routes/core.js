@@ -85,7 +85,7 @@ r.post('/invite/:token', (req, res) => {
 // ---------- signed in from here ----------
 function auth(req, res, next) {
   const token = C.parseCookies(req).mq_session;
-  const row = token && db.prepare('SELECT p.*, s.guest AS is_guest, s.last_seen AS s_last_seen FROM sessions s JOIN profiles p ON p.id = s.profile_id WHERE s.token = ?').get(token);
+  const row = token && db.prepare('SELECT p.*, s.guest AS is_guest, s.created_at AS s_created, s.last_seen AS s_last_seen FROM sessions s JOIN profiles p ON p.id = s.profile_id WHERE s.token = ?').get(token);
   if (!row) {
     // The Marquee apps' own background parts (widgets, Android Auto) sign in with a device key instead of a cookie
     const h = req.headers.authorization || '';
@@ -96,6 +96,10 @@ function auth(req, res, next) {
     req.token = null;
     if (Math.random() < 0.05) db.prepare('UPDATE app_tokens SET last_used = ? WHERE token = ?').run(now(), key);
     return next();
+  }
+  if (row.is_guest && now() - (row.s_created || 0) > 1000 * 60 * 60 * 24 * 30) {
+    db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    return res.status(401).json({ error: 'This guest sign-in has expired — ask for a new invite' });
   }
   req.profile = row;
   req.token = token;
@@ -111,7 +115,8 @@ r.post('/sessions/unblock', (req, res) => { if (req.profile.is_admin) security.u
 
 r.post('/logout', (req, res) => {
   db.prepare('DELETE FROM sessions WHERE token = ?').run(req.token);
-  res.setHeader('Set-Cookie', 'mq_session=; Path=/; Max-Age=0');
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `mq_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
   res.json({ ok: true });
 });
 
@@ -198,8 +203,8 @@ r.get('/home', (req, res) => {
     recentShows: showList(p, '1=1', 'i.added_at DESC', 24),
     collections: collectionsFor(p, 20),
     recentHome: db.prepare(`SELECT i.* FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.type = 'home' AND ${visible(p)} ORDER BY i.added_at DESC LIMIT 12`).all().map(formatItem),
-    allMovies: p.is_kids ? movieList(p, '1=1', 'i.sort_title', 200) : undefined,
-    allShows: p.is_kids ? showList(p, '1=1', 'i.sort_title', 200) : undefined,
+    allMovies: p.is_kids ? movieList(p, '1=1', 'i.sort_title', 200, [], C.formatCard) : undefined,
+    allShows: p.is_kids ? showList(p, '1=1', 'i.sort_title', 200, [], C.formatCard) : undefined,
     counts: {
       movies: db.prepare(`SELECT COUNT(*) AS n FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.type = 'movie' AND ${visible(p)}`).get().n,
       shows: db.prepare(`SELECT COUNT(*) AS n FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.type = 'show' AND ${visible(p)}`).get().n,
@@ -217,13 +222,13 @@ r.get('/movies', (req, res) => {
   const where = [], params = [];
   if (req.query.genre) { where.push(`(', ' || i.genres || ', ') LIKE ?`); params.push(`%, ${req.query.genre}, %`); }
   if (req.query.unwatched === '1') where.push('(pr.watched IS NULL OR pr.watched = 0)');
-  res.json(movieList(req.profile, where.join(' AND ') || '1=1', sort, 5000, params));
+  res.json(movieList(req.profile, where.join(' AND ') || '1=1', sort, 20000, params, C.formatCard));
 });
 r.get('/shows', (req, res) => {
   const sort = SORTS[req.query.sort] || SORTS.title;
   const where = [], params = [];
   if (req.query.genre) { where.push(`(', ' || i.genres || ', ') LIKE ?`); params.push(`%, ${req.query.genre}, %`); }
-  let list = showList(req.profile, where.join(' AND ') || '1=1', sort, 5000, params);
+  let list = showList(req.profile, where.join(' AND ') || '1=1', sort, 20000, params, C.formatCard);
   if (req.query.unwatched === '1') list = list.filter(s => s.unwatched > 0);
   res.json(list);
 });
@@ -364,7 +369,7 @@ r.post('/play/:id', (req, res) => {
   const allowed = activity.check(p, row.id);
   if (!allowed.ok) return res.status(403).json({ error: allowed.message, code: allowed.reason });
   if (!fs.existsSync(row.path)) return res.status(410).json({ error: 'File is missing from disk — try a library scan' });
-  const { caps = {}, audioIndex = 0, start = 0, deviceId = 'unknown', subKey = null, forceStream = false, night = false } = req.body || {};
+  const { caps = {}, audioIndex = 0, start = 0, deviceId = 'unknown', subKey = null, forceStream = false, night = false, forceTranscode = false } = req.body || {};
   const quality = C.capQuality(p, req.body?.quality || 'original');
   if (p.auto_subs && !row.subs_checked && subtitles.configured()) {
     const lang = p.sub_lang || 'en';
@@ -375,12 +380,17 @@ r.post('/play/:id', (req, res) => {
   const burn = subs.find(s => s.key === subKey && s.burn);
   const q = stream.QUALITIES[quality] || stream.QUALITIES.original;
   const ready = versions.bestReady(row.id, q.height);
-  const decision = stream.decide(row, quality, caps, audioIndex | 0, burn ? +burn.key.slice(4) : null, night ? null : ready, !!forceStream || !!night);
+  const decision = stream.decide(row, quality, caps, audioIndex | 0, burn ? +burn.key.slice(4) : null, night ? null : ready, !!forceStream || !!night || !!forceTranscode);
+  // The device said it couldn't play the file as it is (e.g. 10-bit or very high-bitrate video), so fully convert it
+  if (forceTranscode && decision.mode === 'hls') { decision.copyVideo = false; decision.copyAudio = false; decision.reason = 'device'; }
   const base = {
     itemId: row.id, duration: row.duration, title: row.title, showTitle: row.show_title, season: row.season, episode: row.episode,
     subtitles: subs.map(({ key, label, lang, burn: b }) => ({ key, label, lang, burn: !!b, url: b ? null : `/api/subs/${row.id}/${key}` })),
     audioTracks: stream.audioTracks(row), qualities: Object.entries(stream.QUALITIES).map(([k, v]) => ({ key: k, label: v.label })),
     quality, audioIndex: audioIndex | 0, resume: row.watched ? 0 : (row.position || 0), remaining: allowed.remaining ?? null, episodesLeft: allowed.episodesLeft ?? null, maxQuality: p.max_quality || null, night: !!night,
+    chapters: chaptersOf(row),
+    intro: row.intro_end ? { start: row.intro_start || 0, end: row.intro_end } : null,
+    creditsStart: row.credits_start || null,
   };
   const dev = String(deviceId).slice(0, 64);
   let out;
@@ -398,6 +408,30 @@ r.post('/play/:id', (req, res) => {
 // Can this profile start item #id right now? (used before "Up next" so kids get a friendly goodbye instead)
 r.get('/screen-time', (req, res) => res.json(activity.check(req.profile, +req.query.itemId || null)));
 r.post('/play-stop', (req, res) => { activity.endPlay(String(req.body?.deviceId || '')); res.json({ ok: true }); });
+
+// Admin: mark where the intro ends or the credits start, from the current playback position.
+r.post('/items/:id/markers', (req, res) => {
+  if (!req.profile.is_admin) return res.status(403).json({ error: 'Only an admin can set this' });
+  const row = db.prepare("SELECT id, type, parent_id, season FROM items WHERE id = ?").get(req.params.id);
+  if (!row || !['episode', 'movie'].includes(row.type)) return res.status(404).json({ error: 'Not found' });
+  const introEnd = req.body?.introEnd == null ? null : Math.max(0, +req.body.introEnd || 0);
+  const creditsStart = req.body?.creditsStart == null ? null : Math.max(0, +req.body.creditsStart || 0);
+  if (introEnd == null && creditsStart == null) return res.status(400).json({ error: 'Nothing to save' });
+  if (row.type === 'episode' && req.body?.applySeason && introEnd != null) {
+    db.prepare("UPDATE items SET intro_start = 0, intro_end = ?, intro_done = 1 WHERE parent_id = ? AND season = ? AND type = 'episode'").run(introEnd, row.parent_id, row.season);
+  } else if (introEnd != null) {
+    db.prepare('UPDATE items SET intro_start = 0, intro_end = ?, intro_done = 1 WHERE id = ?').run(introEnd, row.id);
+  }
+  if (creditsStart != null) db.prepare('UPDATE items SET credits_start = ?, credits_done = 1 WHERE id = ?').run(creditsStart, row.id);
+  res.json({ ok: true });
+});
+
+function chaptersOf(row) {
+  try {
+    const probe = JSON.parse(row.probe || '{}');
+    return (probe.chapters || []).filter(c => c && Number.isFinite(+c.start)).slice(0, 80).map(c => ({ start: +c.start, title: String(c.title || '').slice(0, 80) }));
+  } catch { return []; }
+}
 
 r.get('/stream/:id', (req, res) => {
   const row = getVisibleItem(req.profile, req.params.id);
