@@ -158,6 +158,7 @@ r.get('/photos', (req, res) => {
   const where = ['i.type = \'photo\'', visible(p)], params = [];
   if (req.query.library) { where.push('i.library_id = ?'); params.push(+req.query.library); }
   if (req.query.folder != null) { where.push("COALESCE(i.folder, '') = ?"); params.push(String(req.query.folder)); }
+  if (req.query.since) { where.push('i.taken_at >= ?'); params.push(+req.query.since); }
   res.json(db.prepare(`SELECT i.id, i.title, i.taken_at, i.folder FROM items i JOIN libraries l ON l.id = i.library_id WHERE ${where.join(' AND ')}
     ORDER BY i.taken_at DESC LIMIT ${Math.min(5000, +req.query.limit || 3000)}`).all(...params)
     .map(x => ({ id: x.id, title: x.title, takenAt: x.taken_at, folder: x.folder, thumb: `/api/photo/${x.id}/thumb`, display: `/api/photo/${x.id}/display`, original: `/api/photo/${x.id}/original` })));

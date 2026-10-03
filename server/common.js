@@ -100,6 +100,9 @@ function formatCard(r) {
   if (r.position != null || r.watched != null) out.progress = { position: r.position || 0, watched: !!r.watched, duration: r.pduration || r.duration };
   if (r.episode_count != null) out.episodeCount = r.episode_count;
   if (r.unwatched != null) out.unwatched = r.unwatched;
+  if (r.season_count) out.seasonCount = r.season_count;
+  if (r.library_name) out.library = r.library_name;
+  if (r.library_id) out.libraryId = r.library_id;
   return out;
 }
 
@@ -132,16 +135,17 @@ function visibleTo(profile, id) {
 }
 
 function showList(profile, where = '1=1', order = 'i.sort_title', limit = 5000, params = [], fmt = formatItem) {
-  return db.prepare(`SELECT i.*,
+  return db.prepare(`SELECT i.*, l.name AS library_name, l.id AS library_id,
       (SELECT COUNT(*) FROM items e WHERE e.parent_id = i.id) AS episode_count,
       (SELECT COUNT(*) FROM items e WHERE e.parent_id = i.id AND NOT EXISTS
-        (SELECT 1 FROM progress p WHERE p.item_id = e.id AND p.profile_id = ? AND p.watched = 1)) AS unwatched
+        (SELECT 1 FROM progress p WHERE p.item_id = e.id AND p.profile_id = ? AND p.watched = 1)) AS unwatched,
+      (SELECT COUNT(DISTINCT e.season) FROM items e WHERE e.parent_id = i.id AND e.season > 0) AS season_count
     FROM items i JOIN libraries l ON l.id = i.library_id
-    WHERE i.type = 'show' AND ${visible(profile)} AND ${where} ORDER BY ${order} LIMIT ${limit | 0}`).all(profile.id, ...params).map(fmt);
+    WHERE i.type = 'show' AND ${visible(profile)} AND ${where} ORDER BY l.name, ${order} LIMIT ${limit | 0}`).all(profile.id, ...params).map(fmt);
 }
 function movieList(profile, where = '1=1', order = 'i.sort_title', limit = 5000, params = [], fmt = formatItem) {
-  return db.prepare(`SELECT i.*, ${PROGRESS_COLS} FROM items i JOIN libraries l ON l.id = i.library_id ${PROGRESS_JOIN}
-    WHERE i.type = 'movie' AND ${visible(profile)} AND ${NOT_DUP} AND ${where} ORDER BY ${order} LIMIT ${limit | 0}`).all(profile.id, ...params).map(fmt);
+  return db.prepare(`SELECT i.*, l.name AS library_name, l.id AS library_id, ${PROGRESS_COLS} FROM items i JOIN libraries l ON l.id = i.library_id ${PROGRESS_JOIN}
+    WHERE i.type = 'movie' AND ${visible(profile)} AND ${NOT_DUP} AND ${where} ORDER BY l.name, ${order} LIMIT ${limit | 0}`).all(profile.id, ...params).map(fmt);
 }
 // Mixed movies + shows by id list, keeping order
 function itemsByIds(profile, ids) {

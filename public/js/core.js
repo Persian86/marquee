@@ -132,7 +132,7 @@ function posterCard(item) {
   const watched = item.progress?.watched || (item.type === 'show' && item.episodeCount && item.unwatched === 0);
   const pct = item.progress && !item.progress.watched && item.progress.position > 0 && item.progress.duration ? Math.min(100, item.progress.position / item.progress.duration * 100) : 0;
   const badge = item.type === 'show' && item.unwatched > 0 ? `<span class="badge">${item.unwatched}</span>` : watched ? `<span class="badge done">${ICON.check}</span>` : '';
-  const sub = item.character ? item.character : item.type === 'show' ? `${item.episodeCount} episode${item.episodeCount === 1 ? '' : 's'}` : item.year || '';
+  const sub = item.character ? item.character : item.type === 'show' ? (item.seasonCount ? `${item.seasonCount} season${item.seasonCount === 1 ? '' : 's'}` : `${item.episodeCount || 0} episodes`) : item.year || '';
   return `<a class="card" href="#/item/${item.id}">
     <div class="poster">${item.poster ? `<img src="${item.poster}" alt="" loading="lazy">` : fallbackArt(item.title, item.year)}${badge}${pct ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}</div>
     <div class="cap">${esc(item.title)}</div>

@@ -405,19 +405,24 @@ function profileModal(p, redraw, o) {
     <div class="field"><label>PIN ${p?.hasPin ? '(leave blank to keep the current one)' : '(optional, 4–8 digits)'}</label><input class="input" id="pp" inputmode="numeric" type="password" autocomplete="new-password" placeholder="${p?.hasPin ? '••••' : 'No PIN'}"></div>
     ${p?.hasPin && !p.isAdmin ? `<label style="display:flex;gap:8px;align-items:center;margin:-4px 0 14px;color:var(--muted);font-size:13.5px"><input type="checkbox" id="pr"> Remove PIN</label>` : ''}
     <div class="field"><label>Highest streaming quality</label><select class="input" id="pq">${[['', 'No limit'], ['1080', '1080p'], ['720', '720p'], ['480', '480p — good for friends far away'], ['360', '360p']].map(([k, l]) => `<option value="${k}" ${(p?.maxQuality || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-    <div class="field"><label>Libraries this profile can use</label><div class="lib-checks">${o.libraries.map(l => `<label><input type="checkbox" value="${l.id}" ${!p || !p.libraries?.length || p.libraries.includes(l.id) ? 'checked' : ''}> ${esc(l.name)}</label>`).join('')}</div></div>
+    <div class="field"><label>Libraries this profile can open</label>
+      <p class="hint">Untick a library and it disappears for this profile, including search. A kids profile should only have Zoey Movies and Zoey TV ticked. Mark those libraries “Safe for kids” when you add them.</p>
+      <div class="lib-checks">${o.libraries.map(l => `<label><input type="checkbox" value="${l.id}" data-safe="${l.kids_safe ? 1 : 0}" ${!p || !p.libraries?.length || p.libraries.includes(l.id) ? 'checked' : ''}> ${esc(l.name)}${l.kids_safe ? ' · kids' : ''}</label>`).join('')}</div></div>
     <div class="list-item" style="border:0;padding:0 0 14px"><div class="grow"><div class="t">Guest (friends & grandparents)</div><div class="s">Hidden from “Who's watching?”. They sign in with an invite link instead.</div></div><label class="switch"><input type="checkbox" id="ph" ${p?.hidden ? 'checked' : ''}><span></span></label></div>
     ${p && !p.isAdmin ? `<div class="field"><label>Invite links</label>${(p.invites || []).map(i => `<div class="invite-row"><span class="code">…${esc(i.token.slice(-6))}</span><span class="hint" style="margin:0">${i.expires_at ? `until ${fmtDate(i.expires_at)}` : 'no expiry'} · used ${i.uses}×</span><button class="btn small" data-copy="${esc(i.token)}">Copy</button><button class="btn small danger" data-revoke="${esc(i.token)}">Remove</button></div>`).join('')}
       <button class="btn small" id="newInv">${ICON.plus} Make an invite link</button></div>` : ''}
     ${p && p.id !== me.id ? `<div class="list-item" style="border:0;padding:0 0 14px"><div class="grow"><div class="t">Admin</div><div class="s">Can change settings, libraries and profiles</div></div><label class="switch"><input type="checkbox" id="pa" ${p.isAdmin ? 'checked' : ''}><span></span></label></div>` : ''}
     <div class="btn-row"><button class="btn primary" id="ps">${p ? 'Save' : 'Create'}</button>${p && p.id !== me.id ? '<button class="btn danger" id="pd">Delete</button>' : ''}</div>`);
   $$('.swatches button', m.el).forEach(b => b.onclick = () => { color = b.dataset.c; $$('.swatches button', m.el).forEach(x => x.classList.toggle('on', x === b)); });
-  $('#pk', m.el).onchange = e => { $('#pl', m.el).value = e.target.checked ? '1' : '4'; };
+  $('#pk', m.el).onchange = e => {
+    $('#pl', m.el).value = e.target.checked ? '1' : '4';
+    if (e.target.checked) $$('.lib-checks input', m.el).forEach(c => { if (c.dataset.safe !== '1') c.checked = false; });
+  };
   $('#ps', m.el).onclick = async () => {
     const num = v => (v.trim() === '' ? null : parseInt(v, 10));
     const allLibs = $$('.lib-checks input', m.el), libs = allLibs.filter(c => c.checked).map(c => +c.value);
     if (!libs.length) return toast('Pick at least one library');
-    const body = { maxQuality: $('#pq', m.el).value || null, hidden: $('#ph', m.el).checked, libraries: libs.length === allLibs.length ? [] : libs,
+    const body = { maxQuality: $('#pq', m.el).value || null, hidden: $('#ph', m.el).checked, libraries: ($('#pk', m.el).checked || libs.length !== allLibs.length) ? libs : [],
       name: $('#pn', m.el).value, color, isKids: $('#pk', m.el).checked, maxLevel: +$('#pl', m.el).value,
       limitWeekday: num($('#lwd', m.el).value), limitWeekend: num($('#lwe', m.el).value), bedtimeStart: $('#bs', m.el).value, bedtimeEnd: $('#be', m.el).value,
       episodeLimit: num($('#pel', m.el).value), letFinish: $('#plf', m.el).checked };

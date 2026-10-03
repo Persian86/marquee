@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { db, getSetting } = require('../db');
+const { db, getSetting, setSetting } = require('../db');
 const C = require('../common');
 const scanner = require('../scanner');
 const tmdb = require('../tmdb');
@@ -205,6 +205,7 @@ r.get('/home', (req, res) => {
     recentHome: db.prepare(`SELECT i.* FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.type = 'home' AND ${visible(p)} ORDER BY i.added_at DESC LIMIT 12`).all().map(formatItem),
     allMovies: p.is_kids ? movieList(p, '1=1', 'i.sort_title', 200, [], C.formatCard) : undefined,
     allShows: p.is_kids ? showList(p, '1=1', 'i.sort_title', 200, [], C.formatCard) : undefined,
+    tonight: C.itemsByIds(p, tonightIds()),
     counts: {
       movies: db.prepare(`SELECT COUNT(*) AS n FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.type = 'movie' AND ${visible(p)}`).get().n,
       shows: db.prepare(`SELECT COUNT(*) AS n FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.type = 'show' AND ${visible(p)}`).get().n,
@@ -214,6 +215,19 @@ r.get('/home', (req, res) => {
     libraries: db.prepare('SELECT COUNT(*) AS n FROM libraries').get().n,
     scanning: scanner.status.running,
   });
+});
+
+function tonightIds() {
+  try { return JSON.parse(getSetting('tonight', '[]')).map(n => n | 0).filter(Boolean); } catch { return []; }
+}
+r.post('/tonight', (req, res) => {
+  if (!req.profile.is_admin) return res.status(403).json({ error: 'Only an admin can set Tonight' });
+  const id = req.body?.itemId | 0;
+  if (!id) return res.status(400).json({ error: 'Nothing to add' });
+  let ids = tonightIds().filter(n => n !== id);
+  if (req.body?.on !== false) ids.unshift(id);
+  setSetting('tonight', JSON.stringify(ids.slice(0, 24)));
+  res.json({ ok: true, ids });
 });
 
 const SORTS = { title: 'i.sort_title', added: 'i.added_at DESC', year: 'i.year DESC, i.sort_title', rating: 'i.vote DESC NULLS LAST, i.sort_title' };
@@ -271,6 +285,7 @@ r.get('/items/:id', (req, res) => {
   if (!row) return res.status(404).json({ error: 'Not found' });
   const item = formatItem(row);
   item.inList = !!db.prepare('SELECT 1 FROM watchlist WHERE profile_id = ? AND item_id = ?').get(p.id, row.id);
+  item.tonight = tonightIds().includes(row.id);
   item.lists = db.prepare('SELECT list_id FROM list_items WHERE item_id = ?').all(row.id).map(x => x.list_id);
   item.trailer = row.trailer || null;
   item.myRating = db.prepare('SELECT rating FROM ratings WHERE profile_id = ? AND item_id = ?').get(p.id, row.id)?.rating || 0;
@@ -350,7 +365,11 @@ r.post('/progress', (req, res) => {
   const dur = duration || item.duration || null;
   const watched = dur && position >= dur * 0.92 ? 1 : 0;
   const was = db.prepare('SELECT watched FROM progress WHERE profile_id = ? AND item_id = ?').get(req.profile.id, item.id)?.watched;
-  if (watched && !was && ['movie', 'episode'].includes(item.type)) trakt.markWatched(req.profile.id, [item.id]);
+  if (watched && !was && ['movie', 'episode'].includes(item.type)) {
+    trakt.markWatched(req.profile.id, [item.id]);
+    const title = db.prepare('SELECT title FROM items WHERE id = ?').get(item.id)?.title || 'something';
+    notify.message({ admins: true, title: `${req.profile.name} finished ${title}`, body: 'Just now', url: `/#/item/${item.id}` }).catch(() => {});
+  }
   db.prepare(`INSERT INTO progress(profile_id, item_id, position, duration, watched, updated_at) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(profile_id, item_id) DO UPDATE SET position = excluded.position, duration = excluded.duration,
       watched = MAX(excluded.watched, CASE WHEN excluded.position < 60 THEN 0 ELSE progress.watched END), updated_at = excluded.updated_at`)
@@ -389,6 +408,7 @@ r.post('/play/:id', (req, res) => {
     audioTracks: stream.audioTracks(row), qualities: Object.entries(stream.QUALITIES).map(([k, v]) => ({ key: k, label: v.label })),
     quality, audioIndex: audioIndex | 0, resume: row.watched ? 0 : (row.position || 0), remaining: allowed.remaining ?? null, episodesLeft: allowed.episodesLeft ?? null, maxQuality: p.max_quality || null, night: !!night,
     chapters: chaptersOf(row),
+    hdr: hdrOf(row),
     intro: row.intro_end ? { start: row.intro_start || 0, end: row.intro_end } : null,
     creditsStart: row.credits_start || null,
   };
@@ -431,6 +451,12 @@ function chaptersOf(row) {
     const probe = JSON.parse(row.probe || '{}');
     return (probe.chapters || []).filter(c => c && Number.isFinite(+c.start)).slice(0, 80).map(c => ({ start: +c.start, title: String(c.title || '').slice(0, 80) }));
   } catch { return []; }
+}
+function hdrOf(row) {
+  try {
+    const probe = JSON.parse(row.probe || '{}');
+    return !!(probe.hdr || /smpte2084|arib-std-b67/i.test(probe.color_transfer || ''));
+  } catch { return false; }
 }
 
 r.get('/stream/:id', (req, res) => {

@@ -77,6 +77,7 @@ const SEASON_SUFFIXES = [
   /[\s._-]*[\[(]?(?:seasons?|series|staffel|saison|temporada)[\s._-]*\d{1,3}(?:[\s._-]*(?:-|to|&|and)[\s._-]*\d{1,3})?[\])]?.*$/i,
   /[\s._-]+s\d{1,2}(?:[\s._-]*-?[\s._-]*s?\d{1,2})?(?=$|[\s._-]).*$/i,
   /[\s._-]*[\[(]?(?:the[\s._-]+)?complete[\s._-]+(?:series|collection|seasons?|tv[\s._-]series).*$/i,
+  /[\s._-]*[\[(]s(?:eason)?[\s._-]*\d{1,3}[\])].*$/i,
 ];
 function stripSeason(name) {
   for (const re of SEASON_SUFFIXES) {

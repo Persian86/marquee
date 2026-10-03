@@ -164,6 +164,28 @@ function mergeShowInto(fromId, toId) {
   db.prepare('DELETE FROM items WHERE id = ?').run(fromId);
 }
 
+// "The Boys Season 1" and "The Boys Season 2" are one show, even if an older scan stored them separately.
+function mergeSeasonFolders(lib) {
+  const shows = db.prepare("SELECT id, title, year FROM items WHERE library_id = ? AND type = 'show'").all(lib.id);
+  const groups = new Map();
+  for (const s of shows) {
+    const key = parse.showKey(parse.stripSeason(s.title));
+    if (!key || key.length < 2) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s);
+  }
+  let merged = 0;
+  for (const [key, list] of groups) {
+    if (list.length < 2) continue;
+    const keep = list.slice().sort((a, b) => (b.year || 0) - (a.year || 0) || a.id - b.id)[0];
+    const { title, year } = parse.parseTitleYear(parse.stripSeason(keep.title));
+    for (const other of list) if (other.id !== keep.id) { mergeShowInto(other.id, keep.id); merged++; }
+    db.prepare('UPDATE items SET title = ?, sort_title = ?, year = COALESCE(year, ?), scan_key = ?, metadata_done = 0 WHERE id = ?')
+      .run(title, parse.sortTitle(title), year, key, keep.id);
+  }
+  if (merged) console.log(`Merged ${merged} season folder(s) into their shows in ${lib.name}`);
+}
+
 // "Bluey" (from season folders) and "Bluey (2018)" are one show, as long as there's only one year to choose from
 function mergeNearShows(lib) {
   const bare = db.prepare("SELECT id, scan_key FROM items WHERE library_id = ? AND type = 'show' AND scan_key IS NOT NULL AND scan_key NOT GLOB '* ([0-9][0-9][0-9][0-9])'").all(lib.id);
@@ -233,7 +255,7 @@ async function scanLibrary(lib) {
           .run(...['~' + parse.showKey(name), ...(keepTitle ? [] : [title, parse.sortTitle(title), year]), s.id]);
       }
     }
-    try { regroupShows(lib); mergeNearShows(lib); } catch (e) { console.warn('Regrouping shows failed:', e.message); }
+    try { regroupShows(lib); mergeNearShows(lib); mergeSeasonFolders(lib); } catch (e) { console.warn('Regrouping shows failed:', e.message); }
   }
 
   const seen = new Set();

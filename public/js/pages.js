@@ -92,6 +92,7 @@ ROUTES[''] = async () => {
       ${f.map((x, i) => `<div class="hero-slide ${i ? '' : 'on'}"><img src="${x.backdrop}" alt=""></div>`).join('')}
       <div class="hero-info" id="heroInfo"></div></section>` : '<div style="height:76px"></div>'}
     <div id="mnBanner"></div>
+    ${row('Tonight', d.tonight, 'posters')}
     ${row('Continue watching', d.continueWatching, 'wide')}
     ${row('Next up', d.nextUp, 'wide')}
     <div id="listenRows"></div>
@@ -153,6 +154,7 @@ function kidsHome(d, main) {
   main.innerHTML = `<div class="page kids-page">
     <h1 class="kids-hello">Hi ${esc(me.name)}! 👋</h1>
     ${screenTimeBanner(d.screenTime)}
+    ${d.tonight?.length ? `<h2 class="kids-h">Tonight</h2><div class="kids-grid">${d.tonight.map(posterCard).join('')}</div>` : ''}
     ${d.continueWatching.length || d.nextUp.length ? `<h2 class="kids-h">Keep watching</h2><div class="kids-grid wide">${[...d.continueWatching, ...d.nextUp].slice(0, 6).map(wideCard).join('')}</div>` : ''}
     ${d.allShows?.length ? `<h2 class="kids-h">Shows</h2><div class="kids-grid">${d.allShows.map(posterCard).join('')}</div>` : ''}
     ${d.allMovies?.length ? `<h2 class="kids-h">Movies</h2><div class="kids-grid">${d.allMovies.map(posterCard).join('')}</div>` : ''}
@@ -177,20 +179,30 @@ async function pageLibrary(kind) {
   const unwatched = ps.get('unwatched') === '1';
   const title = kind === 'movies' ? 'Movies' : 'TV Shows';
   shell(kind, `<div class="page"><h1 class="page-title">${title}</h1>${loading()}</div>`);
+  const lib = ps.get('lib') || '';
   const qs = new URLSearchParams({ sort, ...(genre && { genre }), ...(unwatched && { unwatched: '1' }) });
   const [items, genres] = await Promise.all([api(`/api/${kind}?${qs}`), api(`/api/genres?type=${kind === 'movies' ? 'movie' : 'show'}`)]);
-  const link = p => `#/${kind}?${new URLSearchParams(Object.fromEntries(Object.entries({ sort, genre, unwatched: unwatched ? '1' : '', ...p }).filter(([, v]) => v)))}`;
+  const libraries = [...new Set(items.map(i => i.library).filter(Boolean))];
+  const shown = lib ? items.filter(i => i.library === lib) : items;
+  const link = p => `#/${kind}?${new URLSearchParams(Object.fromEntries(Object.entries({ sort, genre, lib, unwatched: unwatched ? '1' : '', ...p }).filter(([, v]) => v)))}`;
+  const grids = !lib && libraries.length > 1
+    ? libraries.map(name => `<h2 class="sub-h">${esc(name)}</h2><div class="grid" data-lib="${esc(name)}"></div>`).join('')
+    : `<div class="grid" id="libGrid"></div>`;
   $('#main').innerHTML = `<div class="page"><h1 class="page-title">${title}</h1>
-    ${genres.length ? `<div class="chips"><a class="chip ${!genre ? 'on' : ''}" href="${link({ genre: '' })}">All</a>
+    ${libraries.length > 1 ? `<div class="chips"><a class="chip ${!lib ? 'on' : ''}" href="${link({ lib: '' })}">All</a>
+      ${libraries.map(name => `<a class="chip ${lib === name ? 'on' : ''}" href="${link({ lib: name })}">${esc(name)}</a>`).join('')}</div>` : ''}
+    ${genres.length ? `<div class="chips"><a class="chip ${!genre ? 'on' : ''}" href="${link({ genre: '' })}">All genres</a>
       ${genres.map(g => `<a class="chip ${genre === g.name ? 'on' : ''}" href="${link({ genre: g.name })}">${esc(g.name)}</a>`).join('')}</div>` : ''}
     <div class="toolbar">
       <select class="select" id="sort">${[['title', 'A–Z'], ['added', 'Recently added'], ['year', 'Release year'], ['rating', 'Top rated']].map(([k, l]) => `<option value="${k}" ${k === sort ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <a class="chip ${unwatched ? 'on' : ''}" href="${link({ unwatched: unwatched ? '' : '1' })}">Unwatched</a>
-      <span class="count">${items.length} ${kind === 'movies' ? (items.length === 1 ? 'movie' : 'movies') : (items.length === 1 ? 'show' : 'shows')}</span>
+      <span class="count">${shown.length} ${kind === 'movies' ? (shown.length === 1 ? 'movie' : 'movies') : (shown.length === 1 ? 'show' : 'shows')}</span>
     </div>
-    ${items.length ? `<div class="grid" id="libGrid"></div>` : emptyView('', 'Nothing here', genre || unwatched ? 'Try clearing the filters.' : 'No titles found for this profile yet.')}
+    ${shown.length ? grids : emptyView('', 'Nothing here', genre || unwatched || lib ? 'Try clearing the filters.' : 'No titles found for this profile yet.')}
   </div>`;
-  growGrid($('#libGrid'), items, posterCard);
+  if (!lib && libraries.length > 1) {
+    for (const name of libraries) growGrid($(`[data-lib="${CSS.escape(name)}"]`), shown.filter(i => i.library === name), posterCard);
+  } else growGrid($('#libGrid'), shown, posterCard);
   $('#sort').onchange = e => { store.set(`mq_sort_${kind}`, e.target.value); go(link({ sort: e.target.value }), true); };
 }
 ROUTES.movies = () => pageLibrary('movies');
@@ -281,9 +293,13 @@ ROUTES.item = async id => {
     if (current == null || !x.seasons.find(s => s.season === current)) current = (x.nextEpisode && x.nextEpisode.season) ?? x.seasons[0].season;
     $('#seasons').innerHTML = x.seasons.map(s => `<button class="chip ${s.season === current ? 'on' : ''}" data-s="${s.season}">${esc(s.title)}</button>`).join('') +
       `<button class="chip" id="seasonWatched">Mark season watched</button>` +
+      `<button class="chip" id="seasonDl">${ICON.download} Download season</button>` +
       `<button class="chip ${Downloads.smartFor(x.id) ? 'on' : ''}" id="smartDl">${ICON.download} ${Downloads.smartFor(x.id) ? `Keeping next ${Downloads.smartFor(x.id).count} downloaded` : 'Auto-download'}</button>`;
     const season = x.seasons.find(s => s.season === current);
-    $('#episodes').innerHTML = season.episodes.map(e => {
+    const seasonJobs = season.episodes.map(e => ({ e, job: Downloads.jobs().find(j => j.itemId === e.id), saved: Downloads.isSaved(e.id) }));
+    const queued = seasonJobs.filter(x => x.job).length, ready = seasonJobs.filter(x => x.saved).length, failed = seasonJobs.filter(x => x.job?.state === 'failed').length;
+    const dlLine = queued || ready ? `<p class="hint">${ready ? `${ready} ready` : ''}${ready && queued ? ' · ' : ''}${queued ? `${queued} in the queue` : ''}${failed ? ` · ${failed} failed` : ''}. <a href="#/downloads">Open downloads</a></p>` : '';
+    $('#episodes').innerHTML = dlLine + season.episodes.map(e => {
       const pct = e.progress && !e.progress.watched && e.progress.duration ? e.progress.position / e.progress.duration * 100 : 0;
       const img = e.still || x.backdrop;
       const saved = Downloads.isSaved(e.id);
@@ -301,6 +317,10 @@ ROUTES.item = async id => {
       const all = season.episodes.every(e => e.progress?.watched);
       await api(`/api/items/${x.id}/watched`, { body: { watched: !all, season: current } });
       reload();
+    };
+    $('#seasonDl').onclick = () => {
+      season.episodes.forEach(e => Downloads.start({ ...e, show: { id: x.id, title: x.title, poster: x.poster } }));
+      toast(`Downloading ${season.episodes.length} episode${season.episodes.length === 1 ? '' : 's'}`);
     };
     $$('#episodes [data-id]').forEach(b => b.onclick = async () => {
       const on = b.classList.contains('on');
@@ -377,6 +397,7 @@ function itemMenu(x, reload) {
   const canDl = x.type === 'movie';
   const m = modal(`<h2>${esc(x.title)}</h2><div class="menu-list">
     ${canDl ? `<button data-a="download">${ICON.download}<span>Download for offline</span></button>` : ''}
+    ${me.isAdmin ? `<button data-a="tonight">${ICON.star || '★'}<span>${x.tonight ? 'Remove from Tonight' : 'Add to Tonight'}</span></button>` : ''}
     <button data-a="list">${ICON.stack}<span>Add to a family list…</span></button>
     <button data-a="party">${ICON.users}<span>Start a watch party</span></button>
     <button data-a="send">${ICON.cast}<span>Play on another device…</span></button>
@@ -392,6 +413,7 @@ function itemMenu(x, reload) {
     m.close();
     const a = b.dataset.a;
     if (a === 'download') Downloads.start(x);
+    if (a === 'tonight') { await api('/api/tonight', { body: { itemId: x.id, on: !x.tonight } }); toast(x.tonight ? 'Removed from Tonight' : 'Added to Tonight'); }
     if (a === 'list') addToList(x, reload);
     if (a === 'fix') fixMatch(x);
     if (a === 'edit') editDetails(x, reload);

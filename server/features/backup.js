@@ -102,6 +102,11 @@ function nightly() {
   const d = new Date();
   const name = `marquee-${d.toISOString().slice(0, 10)}.json`;
   fs.writeFileSync(path.join(BACKUP_DIR, name), JSON.stringify(create()));
+  for (const dir of ['subtitles', 'faces']) {
+    const src = path.join(CONFIG_DIR, dir);
+    const dest = path.join(BACKUP_DIR, `${dir}-${d.toISOString().slice(0, 10)}`);
+    if (fs.existsSync(src)) { try { fs.cpSync(src, dest, { recursive: true }); } catch (e) { console.warn('Backup sidecars:', e.message); } }
+  }
   const files = fs.readdirSync(BACKUP_DIR).filter(f => /^marquee-.*\.json$/.test(f)).sort();
   for (const f of files.slice(0, -7)) fs.rmSync(path.join(BACKUP_DIR, f), { force: true });
 }

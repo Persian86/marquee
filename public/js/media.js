@@ -394,7 +394,7 @@ ROUTES.photos = async () => {
   const [albums, disc, pins] = await Promise.all([api('/api/photos/albums'), api('/api/discover').catch(() => ({ onThisDay: [] })), api('/api/photos/map').catch(() => [])]);
   const otd = disc.onThisDay || [];
   $('#main').innerHTML = `<div class="page"><h1 class="page-title">Photos</h1>
-    <div class="btn-row" style="margin:-4px 0 16px"><a class="btn small" href="#/memories">${ICON.clock} Memories</a><a class="btn small" href="#/photo-people">${ICON.users} People</a>${pins.length ? `<a class="btn small" href="#/photo-map">${ICON.photo} Map · ${pins.length} places</a>` : ''}</div>
+    <div class="btn-row" style="margin:-4px 0 16px"><button class="btn small primary" id="weekShow">${ICON.play} This week on the TV</button><a class="btn small" href="#/memories">${ICON.clock} Memories</a><a class="btn small" href="#/photo-people">${ICON.users} People</a>${pins.length ? `<a class="btn small" href="#/photo-map">${ICON.photo} Map · ${pins.length} places</a>` : ''}</div>
     <div id="peopleRow"></div>
     ${otd.length ? `<h2 class="search-h">On this day</h2><div class="scroller wide" style="margin:0 calc(-1 * var(--gutter)) 18px">${otd.map((x, i) => `<button class="card" data-otd="${i}" style="text-align:left">
       <div class="thumb">${x.thumb ? `<img src="${x.thumb}" alt="" loading="lazy">` : x.still ? `<img src="${x.still}" alt="">` : ''}${x.type === 'home' ? `<span class="play-ico">${ICON.play}</span>` : ''}</div>
@@ -410,6 +410,12 @@ ROUTES.photos = async () => {
     if (x.type === 'home') go(`#/play/${x.id}`);
     else lightbox(otdPhotos, otdPhotos.findIndex(p => p.id === x.id));
   });
+  $('#weekShow').onclick = async () => {
+    const since = Date.now() - 7 * 86400000;
+    const photos = await api(`/api/photos?since=${since}&limit=200`);
+    if (!photos.length) return toast('No photos from the last 7 days');
+    lightbox(photos, 0, true);
+  };
 };
 
 // Photo map (OpenStreetMap via Leaflet, loaded only on this page)
@@ -423,7 +429,8 @@ function loadLeaflet() {
 ROUTES['photo-map'] = async () => {
   shell('photos', `<div class="page"><a class="back-link" href="#/photos">${ICON.arrowLeft} Photos</a><h1 class="page-title">Where your photos were taken</h1><div id="map" class="photo-map">${loading()}</div></div>`);
   const pins = await api('/api/photos/map');
-  try { await loadLeaflet(); } catch { $('#map').innerHTML = emptyView('', 'Map unavailable', 'The map needs an internet connection to load.'); return; }
+  try { await loadLeaflet(); } catch { $('#map').innerHTML = emptyView('', 'Map unavailable', 'The map tiles come from the internet. This TV or phone cannot reach them right now.'); return; }
+  if (!pins.length) { $('#map').innerHTML = emptyView('', 'No places yet', 'Photos need a location in the file. Phone pictures usually have one.'); return; }
   $('#map').innerHTML = '';
   const map = L.map('map', { zoomControl: true });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);

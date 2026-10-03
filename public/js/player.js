@@ -201,7 +201,7 @@ ROUTES.play = async id => {
       S.info = info; S.mode = info.mode; S.offset = info.mode === 'direct' ? 0 : info.start;
       const badge = $('#pbadge');
       badge.classList.toggle('hidden', info.mode === 'direct' && S.quality === 'original');
-      badge.textContent = info.prepared ? `Ready copy · ${info.prepared}p` : info.mode === 'direct' ? 'Direct' : info.transcoding ? `${S.auto ? 'Auto · ' : ''}${S.quality === 'original' ? 'Converting' : S.quality + 'p'}${info.hw ? ' · GPU' : ''}` : 'Direct stream';
+      badge.textContent = info.prepared ? `Ready copy · ${info.prepared}p` : info.mode === 'direct' ? (info.hdr ? 'Direct · HDR' : 'Direct') : info.transcoding ? `${S.auto ? 'Auto · ' : ''}${S.quality === 'original' ? 'Converting' : S.quality + 'p'}${info.hw ? ' · GPU' : ''}${info.hdr ? ' · HDR' : ''}` : 'Direct stream';
       const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       const native = !!video.canPlayType('application/vnd.apple.mpegurl') && (isIOS || !(window.Hls && Hls.isSupported()));
       if (info.mode === 'direct') {
@@ -232,6 +232,7 @@ ROUTES.play = async id => {
     applySubs();
     if (S.night || S.audioCtx) applyNight();
     video.playbackRate = S.rate || 1;
+    paintChapters();
     if (autoplay) video.play().catch(() => { busy(false); paint(); });
     setTimeout(() => { S.loading = false; }, 600);
     mediaSession();
@@ -393,6 +394,7 @@ ROUTES.play = async id => {
   video.addEventListener('ended', () => {
     beat(true);
     if (S.noNext) return blocked(S.noNext, S.noNextReason || 'limit', true);
+    if (S.stopAfter) { S.stopAfter = false; toast('Stopped after this episode'); return showUI(true); }
     if (S.item?.nextId && !offlineMode) playNext(); else showUI(true);
   });
   video.addEventListener('error', () => {
@@ -518,6 +520,7 @@ ROUTES.play = async id => {
       <h4>Sleep</h4>
       <button data-sleep="0" class="${!S.sleepAt ? 'on' : ''}">Off</button>
       ${[15, 30, 45, 60].map(m => `<button data-sleep="${m}">${m} min</button>`).join('')}
+      <button data-p="stopafter" class="${S.stopAfter ? 'on' : ''}">Stop after this episode</button>
       ${(i.chapters || []).length ? `<h4>Chapters</h4>${i.chapters.map(c => `<button data-ch="${c.start}">${esc(c.title || fmtTime(c.start))}</button>`).join('')}` : ''}
       <h4>More</h4><button data-p="send">${ICON.cast} Play on another device…</button>
       ${!me?.isKids ? `<button data-p="autoskip" class="${me?.autoSkipIntro ? 'on' : ''}">Skip intros & recaps automatically</button>` : ''}
@@ -561,6 +564,7 @@ ROUTES.play = async id => {
         const body = a === 'markcredits' ? { creditsStart: cur() } : { introEnd: cur(), applySeason: a === 'markseason' };
         try { await api(`/api/items/${id}/markers`, { body }); toast(a === 'markcredits' ? 'Credits marked' : a === 'markseason' ? 'Intro saved for this season' : 'Intro marked'); } catch (e) { toast(e.message); }
       }
+      if (a === 'stopafter') { S.stopAfter = !S.stopAfter; toast(S.stopAfter ? 'Will stop after this episode' : 'Will keep playing'); }
       if (a === 'send') Devices.pick('Continue on…', async dev => {
         await api(`/api/devices/${dev.clientId}/command`, { body: { type: 'open', itemId: S.item.id, position: cur() } });
         video.pause(); toast(`Now playing on ${dev.name}`);
@@ -576,9 +580,10 @@ ROUTES.play = async id => {
     });
     $$('[data-sleep]', m).forEach(b => b.onclick = () => {
       clearTimeout(S.sleepTimer);
+      clearInterval(S.fadeTimer);
       const mins = +b.dataset.sleep || 0;
       S.sleepAt = mins ? Date.now() + mins * 60000 : 0;
-      if (mins) S.sleepTimer = setTimeout(() => { video.pause(); toast('Sleep timer — paused'); }, mins * 60000);
+      if (mins) S.sleepTimer = setTimeout(() => fadeOut(), mins * 60000);
       closeMenu();
       toast(mins ? `Sleep timer: ${mins} min` : 'Sleep timer off');
     });
@@ -640,6 +645,30 @@ ROUTES.play = async id => {
       $('#unPlay').onclick = playNext;
       $('#unHide').onclick = () => box.remove();
       api(`/api/items/${n}`).then(e => { const el = $('#unTitle'); if (el) el.textContent = e.type === 'episode' ? `${epCode(e)} · ${e.title}` : e.title; }).catch(() => {});
+    }
+  }
+  function fadeOut() {
+    const started = video.volume;
+    let left = 20;
+    S.fadeTimer = setInterval(() => {
+      left--;
+      video.volume = Math.max(0, started * (left / 20));
+      if (left <= 0) { clearInterval(S.fadeTimer); video.pause(); video.volume = started; toast('Sleep timer — faded out'); }
+    }, 500);
+  }
+  function paintChapters() {
+    const track = $('.track', ui);
+    if (!track) return;
+    track.querySelectorAll('.chapter-tick').forEach(n => n.remove());
+    const d = dur();
+    if (!d) return;
+    for (const c of S.info?.chapters || []) {
+      if (!c.start) continue;
+      const tick = document.createElement('i');
+      tick.className = 'chapter-tick';
+      tick.style.cssText = `position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.55);left:${Math.min(99, c.start / d * 100)}%`;
+      tick.title = c.title || fmtTime(c.start);
+      track.appendChild(tick);
     }
   }
   function playNext() {
