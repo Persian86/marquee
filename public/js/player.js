@@ -895,7 +895,13 @@ ROUTES.play = async id => {
   document.addEventListener('visibilitychange', onHide);
 
   window.__player = { toggle: () => togglePlay(), seek: t => seek(t), cur, next: () => playNext(), stop: () => close(), paused: () => paused(),
-    pause: () => { if (!paused()) togglePlay(); }, resume: () => { if (paused()) togglePlay(); } };
+    pause: () => { if (!paused()) togglePlay(); }, resume: () => { if (paused()) togglePlay(); },
+    chapter: dir => {
+      const list = (S.info?.chapters || []).map(c => c.start).filter(n => n > 0).sort((a, b) => a - b);
+      const now = cur();
+      const target = dir > 0 ? list.find(t => t > now + 1) : [...list].reverse().find(t => t < now - 1);
+      if (target != null) seek(target);
+    } };
   function teardown() {
     if (S.closed) return;
     S.closed = true;

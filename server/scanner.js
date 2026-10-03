@@ -548,4 +548,19 @@ function refreshMetadata(itemId) {
   scanAll();
 }
 
-module.exports = { scanAll, status, probe, refreshMetadata, applyMeta, grabFrame, onScanComplete, META_VERSION };
+function groupAllShows() {
+  let merged = 0;
+  const libs = db.prepare("SELECT * FROM libraries WHERE type = 'tv'").all();
+  for (const lib of libs) {
+    const before = db.prepare("SELECT COUNT(*) AS n FROM items WHERE library_id = ? AND type = 'show'").get(lib.id).n;
+    regroupShows(lib);
+    mergeNearShows(lib);
+    mergeSeasonFolders(lib);
+    const after = db.prepare("SELECT COUNT(*) AS n FROM items WHERE library_id = ? AND type = 'show'").get(lib.id).n;
+    merged += Math.max(0, before - after);
+  }
+  try { mergeMatchedShows(); } catch {}
+  return { libraries: libs.length, merged };
+}
+
+module.exports = { scanAll, status, probe, refreshMetadata, applyMeta, grabFrame, onScanComplete, groupAllShows, META_VERSION };

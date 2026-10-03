@@ -167,7 +167,7 @@ function adminPanels(o) {
         <span class="lib-ico">${LIB_ICON[l.type] || ICON.folder}</span>
         <div class="grow"><div class="t">${esc(l.name)}${l.kids_safe ? '<span class="pill accent">Kids safe</span>' : ''}${l.exists ? '' : '<span class="pill bad">Folder missing</span>'}</div><div class="s">${esc(l.path)} · ${l.count} item${l.count === 1 ? '' : 's'}</div></div>
         <button class="btn small" data-lib="${l.id}">Edit</button></div>`).join('') || '<p class="hint">No libraries yet.</p>'}</div>
-      <div class="btn-row" style="margin-top:12px"><button class="btn small primary" id="addLib">${ICON.plus} Add library</button><button class="btn small" id="scan" ${o.scan.running ? 'disabled' : ''}>${ICON.refresh} Scan now</button></div>
+      <div class="btn-row" style="margin-top:12px"><button class="btn small primary" id="addLib">${ICON.plus} Add library</button><button class="btn small" id="scan" ${o.scan.running ? 'disabled' : ''}>${ICON.refresh} Scan now</button><button class="btn small" id="groupShows">Group seasons</button></div>
       <div id="scanStatus" style="margin-top:12px">${scanStatusHTML(o.scan, o.intros)}</div>
       ${o.watcher.failed.length ? `<p class="hint" style="margin:8px 0 0">${o.watcher.failed.map(esc).join('<br>')}</p>` : ''}
     </div>
@@ -272,6 +272,11 @@ function adminPanels(o) {
 
 function wireAdmin(o, redraw) {
   $('#scan').onclick = async () => { await api('/api/admin/scan', { method: 'POST' }); toast('Scanning…'); $('#scan').disabled = true; };
+  $('#groupShows').onclick = async () => {
+    const r = await api('/api/admin/group-shows', { method: 'POST' });
+    toast(r.merged ? `Joined ${r.merged} season folder${r.merged === 1 ? '' : 's'} into their shows` : 'Nothing to join — seasons are already under one show, or the library is not set to TV Shows');
+    draw();
+  };
   $('#refreshAll').onclick = async () => { await api('/api/admin/refresh', { method: 'POST' }); toast('Refreshing all posters & info…'); };
   $('#introRun').onclick = async () => { await api('/api/admin/intros', { body: { redo: true } }); toast('Looking for intros in the background'); };
   $('#tmdbF').onsubmit = async e => {

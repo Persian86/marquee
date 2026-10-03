@@ -103,6 +103,10 @@ r.delete('/libraries/:id', (req, res) => {
 });
 
 r.post('/scan', (req, res) => { scanner.scanAll(); res.json({ ok: true }); });
+r.post('/group-shows', (req, res) => {
+  try { res.json(scanner.groupAllShows()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 r.post('/refresh', (req, res) => { scanner.refreshMetadata(req.body?.itemId || null); res.json({ ok: true }); });
 r.post('/intros', (req, res) => {
   if (req.body?.redo) db.prepare("UPDATE items SET intro_done = 0, intro_start = NULL, intro_end = NULL WHERE type = 'episode'").run();
