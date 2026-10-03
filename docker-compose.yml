@@ -1,79 +1,26 @@
 name: marquee
 services:
   marquee:
-    # Built by GitHub (see the guide): change YOUR-GITHUB-NAME to your GitHub user name, in lower case.
-    # Building on the box over SSH instead? Use:  image: marquee:latest
-    image: ghcr.io/YOUR-GITHUB-NAME/marquee:latest
+    # Built by GitHub Actions. Image name is already set for this repo.
+    image: ghcr.io/persian86/marquee:latest
     container_name: marquee
     restart: unless-stopped
     ports:
       - "8420:8420"
-      # Guest share links only — safe to publish with Tailscale Funnel (see the guide)
       - "8421:8421"
     environment:
       TZ: Australia/Melbourne
-      # Intel GPU transcoding. Set to "none" if the app logs say the GPU isn't working.
       HWACCEL: vaapi
-      # How many streams can be converted at once
       MAX_TRANSCODES: "3"
-      # Minutes between automatic library scans
       SCAN_INTERVAL_MIN: "30"
     devices:
-      # Gives the app the Intel graphics chip. Delete these two lines if your box has no /dev/dri.
       - /dev/dri:/dev/dri
     volumes:
-      - /DATA/AppData/marquee/config:/config
-      - /DATA/AppData/marquee/transcode:/transcode
-      # Your media — change the left side to wherever your files live. ":ro" = Marquee can never change them.
-      - /DATA/Media/Movies:/media/movies:ro
-      - "/DATA/Media/TV Shows:/media/tv:ro"
-      # Optional extra libraries — delete any line you don't need, or change the left side
-      - /DATA/Media/Music:/media/music:ro
-      - /DATA/Media/Photos:/media/photos:ro
-      - "/DATA/Media/Home Videos:/media/home-videos:ro"
-    x-casaos:
-      envs:
-        - container: HWACCEL
-          description:
-            en_us: "GPU transcoding: vaapi or none"
-      ports:
-        - container: "8420"
-          description:
-            en_us: Web UI
-      volumes:
-        - container: /config
-          description:
-            en_us: Database and artwork
-        - container: /media/movies
-          description:
-            en_us: Movies folder
-        - container: /media/tv
-          description:
-            en_us: TV shows folder
-        - container: /media/music
-          description:
-            en_us: Music folder (optional)
-        - container: /media/photos
-          description:
-            en_us: Photos folder (optional)
-        - container: /media/home-videos
-          description:
-            en_us: Home videos folder (optional)
-
-x-casaos:
-  architectures:
-    - amd64
-    - arm64
-  main: marquee
-  author: Adam
-  developer: Adam
-  category: Media
-  title:
-    en_us: Marquee
-  tagline:
-    en_us: Your family's movies and TV, anywhere
-  description:
-    en_us: A personal Plex/Jellyfin-style media server — movies, TV, music, podcasts, photos and home videos, with family profiles, kids mode, requests, downloads, watch parties and casting.
-  index: /
-  port_map: "8420"
-  scheme: http
+      # Left side is the Fygo folder. In Files, note the real path and replace these.
+      - /volume1/AppData/marquee/config:/config
+      - /volume1/AppData/marquee/transcode:/transcode
+      - /volume1/Media/Movies:/media/movies:ro
+      - /volume1/Media/TV Shows:/media/tv:ro
+      - /volume1/Media/Music:/media/music:ro
+      - /volume1/Media/Photos:/media/photos:ro
+      - /volume1/Media/Home Videos:/media/home-videos:ro

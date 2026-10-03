@@ -1,6 +1,6 @@
-# Marquee: setup guide for ZimaOS
+# Marquee: setup guide for FygoOS
 
-Marquee is your own Plex/Jellyfin-style server. It runs on your ZimaOS box, reads your movies, TV shows, music, photos and home videos (plus podcasts), and streams them to the Marquee Android/TV app, any browser, or a Chromecast. Tailscale lets you watch away from home without opening anything on your router.
+Marquee is your own Plex/Jellyfin-style server. GitHub builds the image. FygoOS downloads it and runs it in Docker. It reads your movies, TV shows, music, photos and home videos (plus podcasts), and streams them to the Marquee Android/TV app, any browser, or a Chromecast.
 
 **Plan for about 20 minutes.** Do the install once from a computer on your home Wi‑Fi.
 
@@ -46,32 +46,20 @@ GitHub builds Marquee on its own computers and keeps it ready for your ZimaOS bo
 
    The code repo stays private. Only the finished app can be downloaded, and it contains no passwords or keys: your settings live on the ZimaOS box.
 
-## 3. Install it from the ZimaOS dashboard
+## 3. Install it on FygoOS
 
-1. Open `docker-compose.yml` (in the unzipped folder, with Notepad). Make two changes:
-   - **The image line.** Change `YOUR-GITHUB-NAME` to your GitHub user name, all lower case:
-     ```
-     image: ghcr.io/adam-example/marquee:latest
-     ```
-   - **The media lines.** Make the left side match where your files live; you can find the exact paths in ZimaOS **Files**. Delete any optional line you don't need.
-     ```
-     - /DATA/Media/Movies:/media/movies:ro
-     - "/DATA/Media/TV Shows:/media/tv:ro"
-     - /DATA/Media/Music:/media/music:ro              (optional)
-     - /DATA/Media/Photos:/media/photos:ro            (optional)
-     - "/DATA/Media/Home Videos:/media/home-videos:ro" (optional)
-     ```
-2. In the ZimaOS dashboard, click **+ → Install a customized app**. Then choose **Import → paste the whole of `docker-compose.yml` → Submit**, then **Install**.
-3. A **Marquee** tile appears. Open it, or go to `http://<your-zima-ip>:8420`.
+1. Open `docker-compose.yml`. The image is already `ghcr.io/persian86/marquee:latest`. Change the left side of each volume to the real folder in Fygo **Files**. If your volume is not mounted at `/volume1`, use the path Fygo shows.
+2. In Fygo, open **Docker → Compose → Add project**. Upload `docker-compose.yml`, or paste it. Create the config and transcode folders first if Fygo does not create them.
+3. Start the project. Open `http://<your-fygo-ip>:8420`.
 
 **If the install fails:**
-- **"pull access denied", "denied", "manifest unknown" or "not found".** Either the package is still private (step 2.4), the user name in the image line is wrong or not lower case, or the GitHub build hasn't finished with a green tick yet.
-- **"/dev/dri" or "error gathering device information".** Your box has no graphics device available. Delete the two lines under `devices:` (and the word `devices:` itself), and set `HWACCEL: none`.
-- **"port is already allocated".** Change `"8420:8420"` to `"8430:8420"` and use port 8430 instead.
+- **"pull access denied" or "not found".** The GitHub package is still private, or the Actions build has no green tick yet.
+- **"/dev/dri" error.** Delete the `devices:` block and set `HWACCEL: none`.
+- **"port is already allocated".** Change `"8420:8420"` to `"8430:8420"` and use port 8430.
 
 ## 4. Updating Marquee later
 
-When there's a new version, put the new files in the repo, replacing the old ones (GitHub Desktop: copy over, **Commit**, **Push**). Wait for the green tick in **Actions**. Then on the ZimaOS dashboard, open the Marquee tile's menu (⋯) → **Settings → Save** to fetch the new version. If your ZimaOS version doesn't fetch it that way, uninstall the Marquee tile and import the compose file again.
+When there's a new version, put the new files in the repo, replacing the old ones. Wait for the green tick in **Actions**. Then in Fygo, open **Docker → Compose**, pull the Marquee project, and recreate it. Do not delete the config folder.
 
 Your profiles, history and settings are kept: they live in `/DATA/AppData/marquee/config`, not in the app.
 

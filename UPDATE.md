@@ -1,22 +1,9 @@
-# Updating Marquee on your Zima
+# Updating Marquee on FygoOS
 
-Your profiles, watch history and settings are safe: they live in `/DATA/AppData/marquee/config`, not inside the app.
+GitHub builds the image. Fygo only downloads it. Your profiles and watch history stay in the config folder you mounted, not in the image.
 
-## Preferred: let GitHub build it
+1. On [github.com/Persian86/marquee](https://github.com/Persian86/marquee), upload the new files onto `main` (Add file → Upload files, or GitHub Desktop: Commit to main → Push origin).
+2. Open **Actions**. **Build Marquee for FygoOS** starts by itself. Wait for the green tick. The image is `ghcr.io/persian86/marquee:latest` for both Intel and ARM.
+3. On Fygo, open **Docker → Compose**, open the Marquee project, and pull/recreate it so it uses the new image. Do not delete the config folder.
 
-1. Put the new files in your `marquee` repo, replacing the old ones (GitHub Desktop: copy over, **Commit**, **Push**). Wait for the green tick in **Actions**.
-2. On the ZimaOS dashboard, open the Marquee tile's menu (⋯) → **Settings → Save** so it pulls `ghcr.io/<your-github-name>/marquee:latest`.
-3. If that ZimaOS version does not fetch the new image, uninstall the tile and import `docker-compose.yml` again. Do not delete `/DATA/AppData/marquee/config`.
-
-## Building on the box
-
-Upload the folder to `/DATA/AppData/marquee/marquee`, then over SSH:
-
-```
-cd /DATA/AppData/marquee/marquee
-docker build -t marquee:latest .
-```
-
-Restart the Marquee app from the dashboard (or `docker restart marquee` if you started it yourself). Do not `docker rm` and `docker run` with a hand-written command — that drops the volume lines in `docker-compose.yml` and can point the app at the wrong folders.
-
-The image is built for both `linux/amd64` and `linux/arm64`. Whisper is compiled without CPU-specific flags so the same image runs on Intel and ARM boxes.
+The package must be public once, or Fygo cannot pull it: GitHub profile → **Packages → marquee → Package settings → Change visibility → Public**.
