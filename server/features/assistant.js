@@ -1,4 +1,4 @@
-// Voice commands from JARVIS, Siri Shortcuts, Google Assistant routines…
+// Voice commands from Ghost, JARVIS, Siri Shortcuts, Google Assistant routines…
 // "play Bluey on the lounge TV", "pause", "what's new", "what should we watch tonight", "start movie night"
 const { db, getSetting } = require('../db');
 const C = require('../common');
@@ -101,7 +101,7 @@ async function suggest(profile, mood) {
 }
 
 async function handle(profile, raw, { device: preferredDevice = null } = {}) {
-  let text = norm(raw).replace(/^(hey |ok |okay )?(jarvis|siri|google|marquee)\b,?\s*/, '').replace(/\s*(please|thanks|thank you)$/, '').replace(/\s+(in|on|using) marquee$/, '').trim();
+  let text = norm(raw).replace(/^(hey |ok |okay )?(ghost|jarvis|siri|google|marquee)\b,?\s*/, '').replace(/\s*(please|thanks|thank you)$/, '').replace(/\s+(in|on|using) marquee$/, '').trim();
   if (!text) return { ok: false, speech: 'Try: play Bluey on the lounge TV.' };
 
   // Remote control

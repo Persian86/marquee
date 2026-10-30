@@ -516,7 +516,7 @@ function newAppKey(kind, profiles) {
   const names = { familynest: 'FamilyNest', assistant: 'JARVIS', widget: 'Widget' };
   const m = modal(`<h2>${kind === 'familynest' ? 'Connect FamilyNest' : kind === 'assistant' ? 'Voice assistant key' : 'Widget key'}</h2>
     <p class="hint">${kind === 'familynest' ? 'FamilyNest uses this to show movie night voting. People vote under their own names, and anyone whose name matches a Marquee profile (like Zoey) gets that profile’s age limits.'
-      : kind === 'assistant' ? 'Paste this into JARVIS (or a Siri Shortcut / Tasker) so it can say “play Bluey on the lounge TV”.'
+      : kind === 'assistant' ? 'Paste this into Ghost (Settings → Marquee), or a Siri Shortcut / Tasker, so it can say “play Bluey on the lounge TV”.'
       : 'The Marquee apps make widget keys for themselves — you only need this for something custom.'}</p>
     <div class="field"><label>Name</label><input class="input" id="akN" value="${names[kind]}" maxlength="60"></div>
     <div class="field"><label>Acts as</label><select class="select" id="akP">${profiles.map(p => `<option value="${p.id}" ${p.id === me.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
