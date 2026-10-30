@@ -192,6 +192,7 @@ function navItems() {
 }
 function shell(active, inner, { transparent = false } = {}) {
   const kids = me?.isKids;
+  Holiday.apply(me?.holiday);
   const nav = navItems();
   const tab = ([id, href, icon, label]) => `<a href="${href}" class="${active === id ? 'active' : ''}">${icon}<span>${label}</span></a>`;
   const mobileTabs = kids
@@ -199,7 +200,7 @@ function shell(active, inner, { transparent = false } = {}) {
     : [nav[0], nav[1], nav[2], ['search', '#/search', ICON.search, 'Search'], ['more', '#/more', ICON.grid, 'More']];
   app.innerHTML = `
     <header class="topbar ${transparent ? '' : 'solid'} ${kids ? 'kids' : ''}" id="topbar">
-      <a class="logo" href="#/">${LOGO}<span>${esc(me?.serverName || 'Marquee')}</span></a>
+      <a class="logo" href="#/">${LOGO}<span>${esc(me?.serverName || 'Marquee')}</span>${me?.holiday ? `<i class="hol-badge" title="${esc(me.holiday.name)}">${me.holiday.emoji}</i>` : ''}</a>
       <nav class="nav-links">${nav.map(([id, href, , label]) => `<a href="${href}" class="${active === id ? 'active' : ''}">${label}</a>`).join('')}
         ${kids ? '' : `<a href="#/collections" class="${active === 'collections' ? 'active' : ''}">Collections</a>`}</nav>
       <div class="spacer"></div>
@@ -218,6 +219,67 @@ function shell(active, inner, { transparent = false } = {}) {
   }
   MiniPlayer.mount();
 }
+// ---------- holiday themes ----------
+// For the month of each holiday (Halloween, Christmas…) the server sends colours and decorations; the app
+// re-colours itself, Home gets a countdown and a row of matching films, and emoji drift down the Home screen.
+const Holiday = (() => {
+  let applied, fx = null;
+  const rgba = (hex, a) => { const n = parseInt(String(hex).slice(1), 16); return `rgba(${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}, ${a})`; };
+  /** Days from today (on this device) to the holiday. */
+  function daysTo(h) {
+    const [y, m, d] = String(h.date).split('-').map(Number);
+    const t = new Date();
+    return Math.round((new Date(y, m - 1, d) - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 864e5);
+  }
+  /** "12 days to Christmas", "Halloween is tomorrow!", "Happy Halloween!" */
+  function countdown(h) {
+    const n = daysTo(h);
+    if (n === 0) return h.id === 'christmas' ? 'Merry Christmas!' : `Happy ${h.name}!`;
+    if (n === 1) return `${h.name} is tomorrow!`;
+    if (n > 1) return `${n} days to ${h.name}`;
+    return `Hope you had a great ${h.name}`;
+  }
+  function apply(h) {
+    const id = h ? h.id : '';
+    if (applied === id) return;
+    applied = id;
+    const root = document.documentElement.style;
+    document.body.className = document.body.className.split(' ').filter(c => c && !c.startsWith('holiday')).join(' ');
+    if (!h) { ['--accent', '--accent-ink', '--hol-a', '--hol-b', '--hol-line'].forEach(v => root.removeProperty(v)); return; }
+    root.setProperty('--accent', h.accent);
+    root.setProperty('--accent-ink', h.ink);
+    root.setProperty('--hol-a', rgba(h.accent, 0.24));
+    root.setProperty('--hol-b', rgba(h.glow || h.accent, 0.3));
+    root.setProperty('--hol-line', rgba(h.accent, 0.4));
+    document.body.classList.add('holiday', `holiday-${h.id}`);
+  }
+  const isTv = () => { try { return !!window.MarqueeNative?.isTv?.(); } catch { return false; } };
+  // Off on TVs (small streaming sticks struggle with animation) and for anyone who asks their device for less motion
+  const fxOn = () => store.get('mq_holiday_fx', true) && !isTv() && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function stop() { if (fx) { fx.remove(); fx = null; } }
+  /** Pumpkins, snowflakes or hearts drifting down (Home only, and never over the player). */
+  function decorate(h) {
+    stop();
+    if (!h || !fxOn() || !(h.particles || []).length) return;
+    fx = document.createElement('div');
+    fx.className = 'holiday-fx';
+    fx.setAttribute('aria-hidden', 'true');
+    const n = innerWidth < 700 ? 9 : 15;
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement('span');
+      s.textContent = h.particles[i % h.particles.length];
+      s.style.left = `${(i + Math.random()) * (100 / n)}%`;
+      s.style.fontSize = `${14 + Math.random() * 14}px`;
+      s.style.animationDuration = `${10 + Math.random() * 10}s`;
+      s.style.animationDelay = `${-Math.random() * 20}s`;
+      s.style.setProperty('--sway', `${Math.round(Math.random() * 70 - 35)}px`);
+      fx.appendChild(s);
+    }
+    document.body.appendChild(fx);
+  }
+  return { apply, countdown, decorate, stop, fxOn, setFx: on => store.set('mq_holiday_fx', !!on) };
+})();
+
 function unreadCount() { return (me && me.unread) || 0; }
 const meUrl = () => `/api/me?since=${store.get('mq_seen_notes', 0)}`;
 const loading = () => `<div class="center"><div class="spinner"></div></div>`;
@@ -252,6 +314,7 @@ function confirmTwice(btn, label) {
 const KIDS_BLOCKED = ['settings', 'activity', 'duplicates', 'search', 'notifications', 'requests'];
 async function route() {
   cleanups.splice(0).forEach(fn => { try { fn(); } catch {} });
+  Holiday.stop();
   const hash = location.hash || '#/';
   const [p] = hash.slice(1).split('?');
   const parts = p.split('/').filter(Boolean);

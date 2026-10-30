@@ -33,18 +33,18 @@ Home Videos/
 
 ## 2. Let GitHub build Marquee (no SSH needed)
 
-GitHub builds Marquee on its own computers and keeps it ready for your ZimaOS box to download, the same way App Store apps work. It's free, and it's the same GitHub you already use for FamilyNest.
+GitHub builds Marquee on its own computers and keeps it ready for your Fygo box to download, the same way App Store apps work. It's free, and it's the same GitHub you already use for FamilyNest.
 
 1. On github.com, click **+ → New repository**. Name it `marquee`, choose **Private**, and click **Create repository**.
 2. Unzip `marquee.zip` on your PC. Then put everything that's *inside* the `marquee` folder into the repo:
    - **Easiest: GitHub Desktop.** Choose **File → Clone repository** and pick `marquee`. Copy everything inside the unzipped `marquee` folder into the cloned folder, then **Commit to main → Push origin**.
    - **Or in the browser:** on the new repo's page, click **uploading an existing file**, drag in everything inside the unzipped folder, and click **Commit changes**. Check that `Dockerfile` and the `.github` folder are at the top level of the repo, not inside another `marquee` folder.
-3. Open the repo's **Actions** tab. **Build Marquee for ZimaOS** starts by itself; if it doesn't, click it and then **Run workflow**. The first build takes 15–30 minutes, and later builds are quicker. Wait for the green tick ✅.
-4. **One-time switch so ZimaOS can download it:**
+3. Open the repo's **Actions** tab. **Build Marquee for FygoOS** starts by itself; if it doesn't, click it and then **Run workflow**. The first build takes 15–30 minutes, and later builds are quicker. Wait for the green tick ✅.
+4. **One-time switch so Fygo can download it:**
    1. On GitHub, click your profile picture → **Your profile → Packages → marquee → Package settings**.
    2. At the bottom, click **Change visibility → Public**.
 
-   The code repo stays private. Only the finished app can be downloaded, and it contains no passwords or keys: your settings live on the ZimaOS box.
+   The code repo stays private. Only the finished app can be downloaded, and it contains no passwords or keys: your settings live on the Fygo box.
 
 ## 3. Install it on FygoOS
 
@@ -61,9 +61,9 @@ GitHub builds Marquee on its own computers and keeps it ready for your ZimaOS bo
 
 When there's a new version, put the new files in the repo, replacing the old ones. Wait for the green tick in **Actions**. Then in Fygo, open **Docker → Compose**, pull the Marquee project, and recreate it. Do not delete the config folder.
 
-Your profiles, history and settings are kept: they live in `/DATA/AppData/marquee/config`, not in the app.
+Your profiles, history and settings are kept: they live in `/volume1/AppData/marquee/config`, not in the app.
 
-*Prefer to build on the box itself?* Upload the folder to `/DATA/AppData/marquee/marquee` with ZimaOS Files. Then over SSH run `cd /DATA/AppData/marquee/marquee && docker build -t marquee:latest .`, and use `image: marquee:latest` in the compose file.
+*Prefer to build on the box itself?* Upload the folder to `/volume1/AppData/marquee/marquee` with Fygo Files. Then over SSH run `cd /volume1/AppData/marquee/marquee && docker build -t marquee:latest .`, and use `image: marquee:latest` in the compose file.
 
 ## 5. First-run setup in the app
 
@@ -77,12 +77,12 @@ Your profiles, history and settings are kept: they live in `/DATA/AppData/marque
 
 Tailscale creates a private network between your devices. Nothing is exposed to the internet, and you don't need to change your router.
 
-1. **On ZimaOS:** App Store → search **Tailscale** → Install → open it and **sign in** (a free Google, Microsoft or Apple account works).
+1. **On FygoOS:** App Store → search **Tailscale** → Install → open it and **sign in** (a free Google, Microsoft or Apple account works).
 2. **On your phone and tablet:** install **Tailscale** from the App Store or Google Play and sign in with the **same account**. Turn it on.
-3. Open the Tailscale admin page (<https://login.tailscale.com/admin/machines>) and note your Zima box's name, e.g. `zimaos`. **MagicDNS** is on by default.
+3. Open the Tailscale admin page (<https://login.tailscale.com/admin/machines>) and note your Fygo box's name. **MagicDNS** is on by default.
 4. On your phone, with Tailscale switched on, open:
    ```
-   http://zimaos:8420
+   http://fygo:8420
    ```
    (or the `100.x.x.x` address shown in Tailscale). This works on mobile data, at a friend's place, anywhere.
 5. **Make it an app icon:**
@@ -91,18 +91,24 @@ Tailscale creates a private network between your devices. Nothing is exposed to 
 
    Share the Tailscale invite with Hayley so her phone can join too: in the admin page, use **Share** on the machine, or add her as a user.
 
+**The apps switch between home and away by themselves.** The Marquee apps (Android, iPhone/iPad, Mac) know two addresses for your server: the home one (`192.168.x.x:8420`), used on your Wi-Fi, and the away one (Tailscale), used everywhere else. Nobody picks, and you stay signed in on both. To teach them the away address, do **one** of these, once:
+- Open Marquee at its Tailscale address in any browser while signed in as an admin. The server remembers it.
+- Or type it in **Settings → Server addresses**.
+
+On Android the app also switches Tailscale on for you when it's needed. On iPhone and Mac, turn on **VPN On Demand** inside the Tailscale app (Wi-Fi: *Except On* your home network; Cellular: *Always*).
+
 **Recommended: a proper `https://` address.** Downloads for offline, phone notifications and Chromecast all need it. In the Tailscale admin go to **DNS** and turn on **HTTPS Certificates**. Then over SSH run:
 ```
 docker exec -it $(docker ps -qf name=tailscale) tailscale serve --bg 8420
 ```
-Marquee is now at `https://zimaos.<your-tailnet>.ts.net`. Use that address everywhere (and add *it* to your home screen). Android then installs Marquee as a full app.
+Marquee is now at `https://fygo.<your-tailnet>.ts.net`. Use that address everywhere (and add *it* to your home screen). Android then installs Marquee as a full app.
 
 ## 7. The Android app (phones, tablets, Android TV, Fire TV)
 
 The `marquee-android` folder is an Android Studio project (package `com.adam.marquee`), set up like your other apps. There's one APK for every device.
 1. **Build it:** open the folder in Android Studio and choose **Build → Build APK(s)**. Or push it to GitHub and let the included workflow build it (see its README).
 2. **Phone/tablet:** install the APK and enter your server address (the `https://…ts.net` one works everywhere).
-3. **Fire TV / Android TV:** copy the APK to `/DATA/AppData/marquee/config/marquee.apk` using ZimaOS Files. Then, on the TV, install the **Downloader** app and enter `http://<your-zima-ip>:8420/app.apk`. Marquee appears with the other apps on the TV home screen. The remote's arrows, OK, Back, play/pause and fast-forward all work.
+3. **Fire TV / Android TV:** copy the APK to `/volume1/AppData/marquee/config/marquee.apk` using Fygo Files. Then, on the TV, install the **Downloader** app and enter `http://<your-fygo-ip>:8420/app.apk`. Marquee appears with the other apps on the TV home screen. The remote's arrows, OK, Back, play/pause and fast-forward all work.
 
 The app adds picture-in-picture, keeps the screen on, plays music in the background, and shows new arrivals as Android notifications. Casting from inside the app isn't possible, so use Chrome for that.
 
@@ -157,14 +163,14 @@ Prefer no install at all? In Safari, open your `https://…ts.net` address, then
 - **Watch together:** **⋯ → Start a watch party** (or in the player menu), then share the code. Everyone who joins stays in sync: pause, play and skip happen for all, and there are emoji reactions. Others join from **More → Join a watch party**.
 
 **On the TV**
-- **Chromecast:** in Settings → *Notifications & casting*, enter your box's home address, e.g. `http://192.168.1.50:8420`. Then, using Chrome on Android or a computer with the https address, tap the cast icon in the player. It only works at home, because the TV can't reach Tailscale.
+- **Chromecast:** in Settings → *Server addresses*, check your box's home address, e.g. `http://192.168.1.50:8420`. Then, using Chrome on Android or a computer with the https address, tap the cast icon in the player. It only works at home, because the TV can't reach Tailscale.
 - **AirPlay:** on iPhone/iPad, the AirPlay icon appears in the player when an Apple TV is nearby.
 - **TV browser:** Marquee works with a TV remote. Use the arrow keys to move, OK to select, and Back to go back.
 
 **Friends & grandparents**
 - Make a profile and turn on **Guest**. It's hidden from "Who's watching?". You can choose which libraries it can use, and cap its quality (e.g. 480p for slow connections).
 - In that profile, tap **Make an invite link** and send it. It signs their device straight in, and that device can't switch to your family profiles.
-- They also need to reach your server. In the Tailscale admin page, use **Share** on your Zima machine and send them the link. They install Tailscale (free) and accept it, and they only see that one machine, nothing else on your network.
+- They also need to reach your server. In the Tailscale admin page, use **Share** on your Fygo machine and send them the link. They install Tailscale (free) and accept it, and they only see that one machine, nothing else on your network.
 - **Any profile** can be limited to certain libraries. For example, Zoey gets *Kids Movies*, *Music* and *Home Videos* only.
 
 **For the kids**
@@ -178,23 +184,23 @@ Prefer no install at all? In Safari, open your `https://…ts.net` address, then
 - **What's new:** the bell lists new arrivals. Turn on **Notify this device** in Settings for a phone notification (with the https address; iPhone needs Marquee added to the home screen first). For **JARVIS** or Discord/ntfy, paste a webhook URL in Settings. Marquee POSTs JSON like `{"event":"new_media","title":"New on Marquee","body":"2 new episodes of Bluey just arrived","items":[…]}`.
 - **Duplicate finder** (Settings) lists films you have more than one copy of. Only the best copy shows in the library.
 - **Storage warnings:** you get a notification if a drive is nearly full, and Settings shows how much space is left.
-- **Requests setup:** install **Radarr** and **Sonarr** from the ZimaOS App Store and connect them to your download client. Then, in Marquee **Settings → Requests**, paste each address and API key (found in their Settings → General), tap **Save & test**, and pick the folder and quality.
+- **Requests setup:** install **Radarr** and **Sonarr** from the Fygo App Store and connect them to your download client. Then, in Marquee **Settings → Requests**, paste each address and API key (found in their Settings → General), tap **Save & test**, and pick the folder and quality.
 - **OpenSubtitles:** make a free account at opensubtitles.com and create an API key under *API consumers*. Paste it into **Settings → Subtitles**. Adding your username and password raises the daily limit.
 - **Trakt:** create an app at trakt.tv/oauth/applications (redirect URI `urn:ietf:wg:oauth:2.0:oob`) and paste its Client ID and Secret into Settings. Each person then links their own account.
 - **Edit details & artwork:** on any title, tap **⋯ → Edit details** to change the title, description, rating or edition. **⋯ → Choose poster & background** picks from the alternatives or uploads your own picture. Your changes stick even when info refreshes.
-- **Backups:** profiles, PINs, watch history and lists are backed up every night to `/DATA/AppData/marquee/config/backups` (7 kept). **Download backup** and **Restore from file** are in Settings.
+- **Backups:** profiles, PINs, watch history and lists are backed up every night to `/volume1/AppData/marquee/config/backups` (7 kept). **Download backup** and **Restore from file** are in Settings.
 - New files are noticed straight away and checked again every 30 minutes. **Settings → Scan now** forces a scan.
 
 ### Extras that need a little setup
 
 - **Guest share links** (send one movie to someone outside the family):
   - Share links live on their own port, 8421, which only knows about share links. The rest of Marquee is never exposed.
-  - To make links work for people without Tailscale, run this once on the ZimaOS box (in SSH, or the Tailscale app's terminal):
+  - To make links work for people without Tailscale, run this once on the Fygo box (in SSH, or the Tailscale app's terminal):
     ```
     tailscale funnel --bg --https=8443 8421
     ```
     This uses port 8443, so your private `https://…ts.net` address for the main app is left alone.
-  - Paste the address into **Settings → Share links**. It's your `https://zimaos.<tailnet>.ts.net:8443`.
+  - Paste the address into **Settings → Share links**. It's your `https://fygo.<tailnet>.ts.net:8443`.
 - **Space saver** (shrinks big old videos overnight):
   - It needs permission to change your files. Remove `:ro` from the media lines you want it to work on, then reinstall.
   - Originals are kept in a hidden `.marquee-originals` folder for a few days, in case you want one back.
@@ -207,10 +213,10 @@ Prefer no install at all? In Safari, open your `https://…ts.net` address, then
 | Problem | Fix |
 |---|---|
 | App won't start, error mentions `/dev/dri` | Remove the `devices:` lines from the compose file and set `HWACCEL: none`. |
-| Settings shows "GPU not working, using CPU" | Set `HWACCEL: none`. Everything still works, but 4K conversion will be slow on small Zima boards. |
+| Settings shows "GPU not working, using CPU" | Set `HWACCEL: none`. Everything still works, but 4K conversion will be slow on small boxes. |
 | Library shows "Folder missing" | The left side of a media line in the compose file is wrong. Fix it and reinstall or restart the app. |
 | Nothing in a kids profile | Titles need posters & info (TMDB key) to get an age rating. Or mark the library **Kids safe**. |
-| Can't connect away from home | Make sure Tailscale is **on** on the phone, and use the Tailscale name or `100.x` address, not `192.168.x.x`. |
+| Can't connect away from home | Make sure Tailscale is **on** on the phone, and that the away address is saved: Settings → *Server addresses*. |
 | Wrong poster | Open the title → ⋯ → Fix match → search and pick the right one. |
 | Download, notifications or cast button missing | These need the `https://…ts.net` address from step 6. Plain `http://` addresses can't use them. |
 | Chromecast says it can't reach the server | Set the home network address in Settings, and make sure the phone and TV are on the home Wi‑Fi. |
@@ -220,4 +226,26 @@ Prefer no install at all? In Safari, open your `https://…ts.net` address, then
 | The map is blank | The map tiles come from OpenStreetMap, so the device needs internet. |
 | New files take a while to appear | Marquee waits about 20 seconds after files stop changing, so half-copied files aren't picked up. |
 
-**Updating Marquee later:** upload the new files over the old folder, run `docker build -t marquee:latest .` again, then restart the Marquee app in the dashboard. Your profiles, watch history and artwork are kept in `/DATA/AppData/marquee/config`.
+**Updating Marquee later:** upload the new files over the old folder, run `docker build -t marquee:latest .` again, then restart the Marquee app in the dashboard. Your profiles, watch history and artwork are kept in `/volume1/AppData/marquee/config`.
+
+## Holiday themes
+
+For the month of each holiday Marquee dresses up by itself, in the browser and in every Marquee app:
+
+| Month | Theme |
+|---|---|
+| January | Australia Day 🇦🇺 |
+| February | Valentine's Day 💝 |
+| March | St Patrick's Day ☘️ (or Easter 🐣 when Easter is in March) |
+| April | Easter 🐣 (when Easter is in April) |
+| May | Mother's Day 💐 |
+| September | Father's Day 🏆 |
+| October | Halloween 🎃 |
+| December | Christmas 🎄 |
+
+- **Colours** change to match, and the holiday's emoji sits next to the Marquee name.
+- **Home** gets a card with a countdown ("12 days to Christmas", "Happy Halloween!"), a row of picks from *your* library (well-known holiday films, plus anything whose title or description fits, like witches and ghosts for Halloween or Santa for Christmas) and a row of holiday episodes from your shows (Bluey's "Christmas Swim", say). Kids' profiles get the same, limited to what they're allowed to watch.
+- **Movie night:** the card's 🍿 button starts a movie night vote with just the holiday's films.
+- **Decorations:** pumpkins, snowflakes or hearts drift down the Home screen. Turn them off per device in Settings → *Holiday decorations on this device*. They're always off on TVs.
+- **Settings → Holiday themes** (admin): Automatic, Off, or keep one theme on (Christmas in July!).
+

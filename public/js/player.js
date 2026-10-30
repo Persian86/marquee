@@ -107,7 +107,7 @@ ROUTES.play = async id => {
     audioIndex: 0, subKey: store.get('mq_subs_on', null), burnKey: null, subCache: {}, track: null, loadingSeq: 0, loading: false,
     lastSaved: 0, closed: false, upnextShown: false, menu: null, dragging: false, introSkipped: false, warned: false,
     stalls: [], stallStart: 0, loadedAt: 0, lastUpCheck: 0, cast: null, room: null, remoteAt: 0, clockOffset: 0, members: [],
-    night: store.get('mq_night', false), audioCtx: null, trick: null, recapSkipped: false, rate: store.get('mq_rate', 1) || 1, sleepTimer: null, sleepAt: 0,
+    night: store.get('mq_night', false), audioCtx: null, trick: null, recapSkipped: false,
   };
   const clientId = deviceId + '-' + Math.random().toString(36).slice(2, 7);
 
@@ -524,7 +524,6 @@ ROUTES.play = async id => {
       ${(i.chapters || []).length ? `<h4>Chapters</h4>${i.chapters.map(c => `<button data-ch="${c.start}">${esc(c.title || fmtTime(c.start))}</button>`).join('')}` : ''}
       <h4>More</h4><button data-p="send">${ICON.cast} Play on another device…</button>
       ${!me?.isKids ? `<button data-p="autoskip" class="${me?.autoSkipIntro ? 'on' : ''}">Skip intros & recaps automatically</button>` : ''}
-      ${me?.isAdmin && S.item?.type === 'episode' ? `<button data-p="markintro">Intro ends here</button><button data-p="markseason">Use this intro for the season</button><button data-p="markcredits">Credits start here</button>` : ''}
       ${i.maxQuality ? `<p class="pm-note">This profile is limited to ${i.maxQuality}p.</p>` : ''}
       <p class="pm-note">${i.prepared ? 'Playing a prepared copy — no converting needed' : i.mode === 'direct' ? 'Playing the original file' : i.transcoding ? `Converting on the fly (${esc(i.reason)})` : 'Repackaging without re-encoding'}</p>`;
     m.addEventListener('click', e => e.stopPropagation());

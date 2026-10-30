@@ -727,3 +727,25 @@ body.pip .p-ui, body.pip .p-status, body.pip .upnext, body.pip .p-reactions { di
 #askMic.listening { background: var(--danger); color: #fff; animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .6; } }
 code { background: var(--bg-3); padding: 2px 6px; border-radius: 6px; font-size: 12.5px; word-break: break-all; }
+
+/* ---------- holiday themes ---------- */
+.hol-badge { font-style: normal; font-size: 16px; letter-spacing: 0; margin-left: -3px; }
+.holiday-banner { display: flex; align-items: center; gap: 14px; margin: 0 var(--gutter) 22px; padding: 14px 16px; border-radius: 16px;
+  background: linear-gradient(110deg, var(--hol-a, rgba(240, 180, 41, .2)), var(--hol-b, rgba(240, 180, 41, .06))); border: 1px solid var(--hol-line, rgba(240, 180, 41, .3)); }
+.kids-page .holiday-banner { margin: 0 0 18px; }
+.hb-emoji { font-size: 36px; line-height: 1; flex: none; }
+.hb-text { flex: 1; min-width: 0; }
+.hb-text b { display: block; font-size: 17px; font-family: var(--display); }
+.hb-text span { color: var(--muted); font-size: 13px; }
+.holiday-banner .btn { flex: none; gap: 6px; }
+.holiday-banner .btn svg { width: 16px; height: 16px; }
+@media (max-width: 420px) { .holiday-banner .btn span { display: none; } }
+.holiday .mn-banner { background: linear-gradient(110deg, var(--hol-a), rgba(0, 0, 0, 0)); border-color: var(--hol-line); }
+.holiday-fx { position: fixed; inset: 0; pointer-events: none; z-index: 35; overflow: hidden; }
+.holiday-fx span { position: absolute; top: -48px; opacity: .5; animation: holFall linear infinite; will-change: transform; }
+@keyframes holFall {
+  from { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(var(--sway, 20px), 55vh, 0) rotate(150deg); }
+  to { transform: translate3d(0, calc(100vh + 96px), 0) rotate(300deg); }
+}
+

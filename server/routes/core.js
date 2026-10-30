@@ -3,6 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const holidays = require('../features/holidays');
 const { db, getSetting, setSetting } = require('../db');
 const C = require('../common');
 const scanner = require('../scanner');
@@ -23,9 +24,24 @@ const { now, formatItem, visible, showList, movieList, getVisibleItem, PROGRESS_
 const r = express.Router();
 
 // ---------- public ----------
+// Which of the server's two addresses a request came in on: "home" (your Wi-Fi) or "away" (Tailscale)
+function addressOf(req) {
+  const host = String(req.headers.host || '');
+  if (!/^[a-z0-9.-]+(:\d+)?$/i.test(host)) return {};
+  const isHome = /^(192\.168|10|172\.(1[6-9]|2\d|3[01]))\./.test(host);
+  const isTailscale = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host) || /\.ts\.net(:\d+)?$/i.test(host);
+  const proto = req.headers['x-forwarded-proto'] === 'https' || req.secure ? 'https' : 'http';
+  return { here: `${proto}://${host}`, isHome, isTailscale };
+}
+
 r.get('/status', (req, res) => {
   const count = db.prepare('SELECT COUNT(*) AS n FROM profiles').get().n;
-  res.json({ needsSetup: count === 0, name: getSetting('server_name', 'Marquee') });
+  // The apps learn both addresses from here, so they can pick "home" on your Wi-Fi and "away" everywhere else by themselves
+  const a = addressOf(req);
+  res.json({
+    needsSetup: count === 0, name: getSetting('server_name', 'Marquee'),
+    addresses: { home: getSetting('lan_url', '') || (a.isHome ? a.here : ''), away: getSetting('remote_url', '') || (a.isTailscale ? a.here : '') },
+  });
 });
 
 r.post('/setup', (req, res) => {
@@ -85,7 +101,7 @@ r.post('/invite/:token', (req, res) => {
 // ---------- signed in from here ----------
 function auth(req, res, next) {
   const token = C.parseCookies(req).mq_session;
-  const row = token && db.prepare('SELECT p.*, s.guest AS is_guest, s.created_at AS s_created, s.last_seen AS s_last_seen FROM sessions s JOIN profiles p ON p.id = s.profile_id WHERE s.token = ?').get(token);
+  const row = token && db.prepare('SELECT p.*, s.guest AS is_guest, s.last_seen AS s_last_seen FROM sessions s JOIN profiles p ON p.id = s.profile_id WHERE s.token = ?').get(token);
   if (!row) {
     // The Marquee apps' own background parts (widgets, Android Auto) sign in with a device key instead of a cookie
     const h = req.headers.authorization || '';
@@ -96,10 +112,6 @@ function auth(req, res, next) {
     req.token = null;
     if (Math.random() < 0.05) db.prepare('UPDATE app_tokens SET last_used = ? WHERE token = ?').run(now(), key);
     return next();
-  }
-  if (row.is_guest && now() - (row.s_created || 0) > 1000 * 60 * 60 * 24 * 30) {
-    db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
-    return res.status(401).json({ error: 'This guest sign-in has expired — ask for a new invite' });
   }
   req.profile = row;
   req.token = token;
@@ -115,8 +127,7 @@ r.post('/sessions/unblock', (req, res) => { if (req.profile.is_admin) security.u
 
 r.post('/logout', (req, res) => {
   db.prepare('DELETE FROM sessions WHERE token = ?').run(req.token);
-  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `mq_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+  res.setHeader('Set-Cookie', 'mq_session=; Path=/; Max-Age=0');
   res.json({ ok: true });
 });
 
@@ -131,10 +142,18 @@ function sections(p) {
 }
 
 r.get('/me', (req, res) => {
+  // The first time an admin opens Marquee at its home or Tailscale address, remember that address, so every app
+  // learns both without anyone typing them (change them any time in Settings → Server addresses)
+  if (req.profile.is_admin) {
+    const a = addressOf(req);
+    if (a.isHome && !getSetting('lan_url', '')) setSetting('lan_url', a.here);
+    if (a.isTailscale && !getSetting('remote_url', '')) setSetting('remote_url', a.here);
+  }
   const p = req.profile;
   res.json({
     ...C.publicProfile(p), guest: !!p.is_guest, serverName: getSetting('server_name', 'Marquee'), sections: sections(p),
     screenTime: activity.check(p), usedToday: activity.usedToday(p.id), limitToday: activity.limitFor(p),
+    holiday: holidays.info(holidays.current()),
     pushKey: notify.publicKey(), unread: db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE created_at > ?').get(+req.query.since || 0).n,
   });
 });
@@ -206,6 +225,7 @@ r.get('/home', (req, res) => {
     allMovies: p.is_kids ? movieList(p, '1=1', 'i.sort_title', 200, [], C.formatCard) : undefined,
     allShows: p.is_kids ? showList(p, '1=1', 'i.sort_title', 200, [], C.formatCard) : undefined,
     tonight: C.itemsByIds(p, tonightIds()),
+    holiday: (() => { const h = holidays.current(); return h ? { ...holidays.info(h), ...holidays.forHome(p, h) } : null; })(),
     counts: {
       movies: db.prepare(`SELECT COUNT(*) AS n FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.type = 'movie' AND ${visible(p)}`).get().n,
       shows: db.prepare(`SELECT COUNT(*) AS n FROM items i JOIN libraries l ON l.id = i.library_id WHERE i.type = 'show' AND ${visible(p)}`).get().n,
@@ -526,7 +546,7 @@ r.post('/cast/:id', (req, res) => {
   const allowed = activity.check(req.profile, row.id);
   if (!allowed.ok) return res.status(403).json({ error: allowed.message, code: allowed.reason });
   const base = castBase(req);
-  if (!base) return res.status(400).json({ error: "Casting needs your server's home network address. Ask the admin to set it in Settings → Server." });
+  if (!base) return res.status(400).json({ error: "Casting needs your server's home network address. Ask the admin to set it in Settings → Server addresses." });
   const { quality = '1080', start = 0, audioIndex = 0, subKey = null } = req.body || {};
   res.json({ ...cast.prepare(row, { quality, start: +start || 0, audioIndex: audioIndex | 0, subKey, base }), title: row.title, showTitle: row.show_title });
 });

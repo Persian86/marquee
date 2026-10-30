@@ -28,11 +28,9 @@ function createSession(res, profileId, req = null, { guest = false, deviceId = n
   const ip = req ? String(req.ip || '').replace(/^::ffff:/, '') : null;
   db.prepare('INSERT INTO sessions(token, profile_id, created_at, last_seen, guest, ip, ua, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .run(token, profileId, now(), now(), guest ? 1 : 0, ip, req ? String(req.headers['user-agent'] || '').slice(0, 300) : null, deviceId);
-  // Over https the cookie is marked Secure so it's never sent over plain http.
-  // Guest invite sessions expire in 30 days; family sessions last a year and are dropped after a year of silence.
+  // Over https the cookie is marked Secure so it's never sent over plain http
   const secure = req && (req.secure || req.headers['x-forwarded-proto'] === 'https') ? '; Secure' : '';
-  const maxAge = guest ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 365;
-  const cookie = `mq_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+  const cookie = `mq_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 365}${secure}`;
   const prev = res.getHeader('Set-Cookie');
   res.setHeader('Set-Cookie', prev ? [].concat(prev, cookie) : cookie);
   return token;

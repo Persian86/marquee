@@ -25,6 +25,12 @@ function pickCandidates(profile, opts, exclude = new Set(), count = 12) {
   if (opts.genre) { where.push(`(', ' || i.genres || ', ') LIKE ?`); params.push(`%, ${opts.genre}, %`); }
   if (opts.maxRuntime) where.push(`i.duration <= ${(opts.maxRuntime | 0) * 60 + 300}`);
   if (opts.familyFriendly) where.push('(i.level IS NOT NULL AND i.level <= 1)'); // G and PG
+  if (opts.holiday) {
+    // Only films that suit the holiday (Christmas favourites, Halloween picks…)
+    const h = require('./holidays').BY_ID.get(opts.holiday);
+    const ids = h ? require('./holidays').movieIds(profile, h) : [];
+    where.push(ids.length ? `i.id IN (${ids.map(n => n | 0).join(',')})` : '0');
+  }
   if (opts.pool !== 'all') where.push('(pr.watched IS NULL OR pr.watched = 0)');
   if (opts.pool === 'mylist') where.push(`i.id IN (SELECT item_id FROM watchlist WHERE profile_id = ${profile.id | 0} UNION SELECT li.item_id FROM list_items li JOIN lists l2 ON l2.id = li.list_id WHERE l2.shared = 1)`);
   if (exclude.size) where.push(`i.id NOT IN (${[...exclude].map(n => n | 0).join(',')})`);
@@ -38,8 +44,10 @@ function create(profile, opts = {}) {
     maxRuntime: opts.maxRuntime ? Math.max(60, Math.min(300, opts.maxRuntime | 0)) : null,
     familyFriendly: !!opts.familyFriendly,
     pool: ['unwatched', 'all', 'mylist'].includes(opts.pool) ? opts.pool : 'unwatched',
+    holiday: opts.holiday && require('./holidays').BY_ID.has(String(opts.holiday)) ? String(opts.holiday) : null,
   };
   const candidates = pickCandidates(profile, o);
+  if (candidates.length < 2 && o.holiday) throw new Error(`Not enough ${require('./holidays').BY_ID.get(o.holiday).name} films in your library for a vote yet`);
   if (candidates.length < 2) throw new Error(o.genre || o.maxRuntime || o.pool === 'mylist' ? 'Not enough movies match those choices — try fewer filters' : 'Add some movies to Marquee first');
   const code = newCode();
   const room = {

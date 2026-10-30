@@ -48,7 +48,7 @@ r.get('/overview', (req, res) => {
     transcoding: { hwaccel: config.HWACCEL, hwAvailable: stream.hwStatus.ok, activeStreams: stream.sessions.size, tonemap: stream.HAS_ZSCALE },
     levels: tmdb.LEVEL_NAMES,
     settings: {
-      webhookUrl: getSetting('webhook_url', ''), lanUrl: getSetting('lan_url', ''), autoOptimize: getSetting('auto_optimize', '0') === '1',
+      webhookUrl: getSetting('webhook_url', ''), lanUrl: getSetting('lan_url', ''), remoteUrl: getSetting('remote_url', ''), holidayMode: getSetting('holiday_mode', 'auto'), autoOptimize: getSetting('auto_optimize', '0') === '1',
       autoOptimizeQuality: getSetting('auto_optimize_quality', '720'), optimizeMaxGb: +getSetting('optimize_max_gb', '50'),
       osApiKeySet: !!getSetting('os_api_key'), osUsername: getSetting('os_username', ''), osLanguages: getSetting('os_languages', 'en'),
       radarrUrl: getSetting('radarr_url', ''), radarrKeySet: !!getSetting('radarr_key'), radarrRoot: getSetting('radarr_root', ''), radarrProfile: getSetting('radarr_profile', ''),
@@ -123,9 +123,21 @@ r.put('/settings', wrap(async (req, res) => {
     setSetting('webhook_url', u);
   }
   if (b.lanUrl != null) {
-    const u = String(b.lanUrl).trim().replace(/\/$/, '');
+    let u = String(b.lanUrl).trim().replace(/\/$/, '');
+    if (u && !/^https?:\/\//.test(u)) u = 'http://' + u; // "192.168.1.50:8420" is fine to type
     if (u && !/^https?:\/\/[^/]+$/.test(u)) return res.status(400).json({ error: 'Use the form http://192.168.1.50:8420' });
     setSetting('lan_url', u);
+  }
+  if (b.remoteUrl != null) {
+    let u = String(b.remoteUrl).trim().replace(/\/$/, '');
+    if (u && !/^https?:\/\//.test(u)) u = (/\.ts\.net/i.test(u) ? 'https://' : 'http://') + u;
+    if (u && !/^https?:\/\/[^/]+$/.test(u)) return res.status(400).json({ error: 'Use the form http://100.101.102.103:8420 or https://zimaos.your-name.ts.net' });
+    setSetting('remote_url', u);
+  }
+  if (b.holidayMode != null) {
+    const m = String(b.holidayMode);
+    if (!['auto', 'off'].includes(m) && !require('../features/holidays').BY_ID.has(m)) return res.status(400).json({ error: 'Unknown holiday theme' });
+    setSetting('holiday_mode', m);
   }
   if (b.autoOptimize != null) setSetting('auto_optimize', b.autoOptimize ? '1' : '0');
   if (b.trickplay != null) { setSetting('trickplay', b.trickplay ? '1' : '0'); if (b.trickplay) trickplay.run(); }

@@ -91,6 +91,8 @@ ROUTES[''] = async () => {
     ${f.length ? `<section class="hero" id="hero">
       ${f.map((x, i) => `<div class="hero-slide ${i ? '' : 'on'}"><img src="${x.backdrop}" alt=""></div>`).join('')}
       <div class="hero-info" id="heroInfo"></div></section>` : '<div style="height:76px"></div>'}
+    ${holidayBanner(d.holiday)}
+    ${d.holiday ? row(`${d.holiday.emoji} ${d.holiday.row}`, d.holiday.picks, 'posters') + row(`${d.holiday.name} episodes`, d.holiday.episodes, 'wide') : ''}
     <div id="mnBanner"></div>
     ${row('Tonight', d.tonight, 'posters')}
     ${row('Continue watching', d.continueWatching, 'wide')}
@@ -104,6 +106,7 @@ ROUTES[''] = async () => {
     ${row('Home videos', d.recentHome, 'wide', '#/home-videos')}
     <div id="discoverMore"></div>`;
   loadDiscovery();
+  holidayWire(d.holiday);
   api('/api/movienight').then(list => {
     const a = list.find(x => !x.match);
     if (a && $('#mnBanner')) $('#mnBanner').innerHTML = `<a class="mn-banner" href="#/movienight/${a.code}">${ICON.popcorn}<div><b>${esc(a.host)} started a movie night</b><span>${esc(a.members.join(', '))} ${a.members.length === 1 ? 'is' : 'are'} voting — tap to join</span></div>${ICON.chevron}</a>`;
@@ -149,11 +152,37 @@ async function loadDiscovery() {
   if (more) more.innerHTML = [...disc.because, ...disc.smart].map(r => row(r.title, r.items, 'posters', r.link)).join('');
 }
 
+// The holiday card on Home: a countdown, and a movie night with only the holiday's films
+function holidayBanner(h) {
+  if (!h) return '';
+  const films = (h.picks || []).filter(x => x.type === 'movie').length;
+  const sub = h.picks?.length ? `${h.row} from your library` : `No ${h.name} films in your library yet`;
+  return `<div class="holiday-banner"><div class="hb-emoji">${h.emoji}</div>
+    <div class="hb-text"><b>${esc(Holiday.countdown(h))}</b><span>${esc(sub)}</span></div>
+    ${films >= 2 && !me.guest ? `<button class="btn small primary" id="holMN">${ICON.popcorn}<span>Movie night</span></button>` : ''}</div>`;
+}
+function holidayWire(h) {
+  if (!h) return;
+  Holiday.decorate(h);
+  const b = $('#holMN');
+  if (b) b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const r = await api('/api/movienight', { body: { holiday: h.id, pool: 'all' } });
+      go(`#/movienight/${r.code}`);
+    } catch (e) { toast(e.message, 4000); b.disabled = false; }
+  };
+}
+
 function kidsHome(d, main) {
   const all = [...(d.allShows || []), ...(d.allMovies || [])];
+  const h = d.holiday;
   main.innerHTML = `<div class="page kids-page">
-    <h1 class="kids-hello">Hi ${esc(me.name)}! 👋</h1>
+    <h1 class="kids-hello">Hi ${esc(me.name)}! ${h ? h.emoji : '👋'}</h1>
     ${screenTimeBanner(d.screenTime)}
+    ${h ? holidayBanner(h) : ''}
+    ${h?.picks?.length ? `<h2 class="kids-h">${h.emoji} ${esc(h.row)}</h2><div class="kids-grid">${h.picks.map(posterCard).join('')}</div>` : ''}
+    ${h?.episodes?.length ? `<h2 class="kids-h">${esc(h.name)} episodes</h2><div class="kids-grid wide">${h.episodes.map(wideCard).join('')}</div>` : ''}
     ${d.tonight?.length ? `<h2 class="kids-h">Tonight</h2><div class="kids-grid">${d.tonight.map(posterCard).join('')}</div>` : ''}
     ${d.continueWatching.length || d.nextUp.length ? `<h2 class="kids-h">Keep watching</h2><div class="kids-grid wide">${[...d.continueWatching, ...d.nextUp].slice(0, 6).map(wideCard).join('')}</div>` : ''}
     ${d.allShows?.length ? `<h2 class="kids-h">Shows</h2><div class="kids-grid">${d.allShows.map(posterCard).join('')}</div>` : ''}
@@ -161,6 +190,7 @@ function kidsHome(d, main) {
     ${d.recentHome?.length ? `<h2 class="kids-h">Family videos</h2><div class="kids-grid wide">${d.recentHome.map(wideCard).join('')}</div>` : ''}
     ${!all.length && !d.recentHome?.length ? emptyView(ICON.popcorn, 'Nothing here yet', 'Ask a grown-up to add some shows for you.') : ''}
   </div>`;
+  holidayWire(h);
 }
 
 // ---------- browse grids ----------

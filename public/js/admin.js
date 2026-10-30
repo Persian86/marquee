@@ -48,9 +48,11 @@ ROUTES.settings = async () => {
         <div class="list-item"><div class="grow"><div class="t">Theme songs</div><div class="s">Play a show's theme quietly when you open it</div></div>
           <label class="switch"><input type="checkbox" id="themes" ${me.themeMusic !== false ? 'checked' : ''}><span></span></label></div>
         ${me.guest ? '' : `<div class="list-item"><div class="grow"><div class="t">Signed-in devices</div><div class="s">See every phone, TV and browser signed in, and sign any out</div></div><a class="btn small" href="#/devices">Open</a></div>`}
+        <div class="list-item"><div class="grow"><div class="t">Holiday decorations on this device</div><div class="s">Pumpkins, snowflakes or hearts drifting down Home during holiday months</div></div>
+          <label class="switch"><input type="checkbox" id="holFx" ${Holiday.fxOn() ? 'checked' : ''}><span></span></label></div>
         <div class="list-item"><div class="grow"><div class="t">Skip intros automatically</div><div class="s">Jumps past TV theme songs. You can always tap “Skip intro” instead.</div></div>
           <label class="switch"><input type="checkbox" id="autoskip" ${me.autoSkipIntro ? 'checked' : ''}><span></span></label></div>
-        ${window.MarqueeNative ? `<div class="list-item"><div class="grow"><div class="t">Marquee app ${esc(MarqueeNative.version())}</div><div class="s">Connected to ${esc(MarqueeNative.server())}. New arrivals show as phone notifications automatically.</div></div>${MarqueeNative.checkUpdates ? '<button class="btn small" id="appUpd">Check for updates</button>' : ''}<button class="btn small" id="appServer">Change server</button></div>`
+        ${window.MarqueeNative ? `<div class="list-item"><div class="grow"><div class="t">Marquee app ${esc(MarqueeNative.version())}</div><div class="s">Connected to ${esc(MarqueeNative.server())}. The app uses your home address on your Wi-Fi and your away address everywhere else, by itself.</div></div>${MarqueeNative.checkUpdates ? '<button class="btn small" id="appUpd">Check for updates</button>' : ''}<button class="btn small" id="appServer">Change addresses</button></div>`
         : `<div class="list-item"><div class="grow"><div class="t">Notify this device about new arrivals</div><div class="s">${Push.supported() ? 'A notification when new movies, episodes or family videos land' : 'Needs the https:// Tailscale address — see the setup guide'}</div></div>
           ${pushOn ? '<button class="btn small" id="pushTest">Test</button>' : ''}<label class="switch"><input type="checkbox" id="push" ${pushOn ? 'checked' : ''}><span></span></label></div>`}
         <div class="list-item"><div class="grow"><div class="t">Downloads</div><div class="s">${Downloads.saved().length} saved on this device</div></div><a class="btn small" href="#/downloads">Open</a></div>
@@ -68,6 +70,7 @@ ROUTES.settings = async () => {
     $('#qpref').onchange = e => { store.set('mq_quality', e.target.value); toast('Saved for this device'); };
     $('#cinema').onchange = async e => { await api('/api/me', { method: 'PATCH', body: { cinemaMode: e.target.checked } }); me.cinemaMode = e.target.checked; toast(e.target.checked ? 'Trailers before movies' : 'Cinema mode off'); };
     $('#themes').onchange = async e => { await api('/api/me', { method: 'PATCH', body: { themeMusic: e.target.checked } }); me.themeMusic = e.target.checked; if (!e.target.checked) ThemeMusic.stop(); toast('Saved'); };
+    $('#holFx').onchange = e => { Holiday.setFx(e.target.checked); toast(e.target.checked ? 'Decorations on' : 'Decorations off'); };
     $('#autoskip').onchange = async e => { await api('/api/me', { method: 'PATCH', body: { autoSkipIntro: e.target.checked } }); me.autoSkipIntro = e.target.checked; };
     if ($('#appServer')) $('#appServer').onclick = () => MarqueeNative.openAppSettings();
     if ($('#appUpd')) $('#appUpd').onclick = () => MarqueeNative.checkUpdates();
@@ -245,15 +248,22 @@ function adminPanels(o) {
     </div>
 
     <div class="panel">
-      <h2>Notifications & casting</h2>
-      <form id="hookF" class="field"><label>Webhook (optional) — get a message in JARVIS, Discord, Slack or ntfy when new things arrive</label>
-        <div class="btn-row" style="flex-wrap:nowrap"><input class="input" name="u" value="${esc(set.webhookUrl)}" placeholder="https://…"><button class="btn">Save</button></div></form>
-      <form id="lanF" class="field"><label>Home network address — needed for Chromecast (your TV can't use the Tailscale address)</label>
+      <h2>Server addresses</h2><p class="hint">The Marquee apps use the home address on your Wi-Fi and switch to the away address by themselves when you're out. Marquee fills these in the first time you open it at each address.</p>
+      <form id="lanF" class="field"><label>Home address — on your Wi-Fi (also needed for Chromecast)</label>
         <div class="btn-row" style="flex-wrap:nowrap"><input class="input" name="u" value="${esc(set.lanUrl)}" placeholder="http://192.168.1.50:8420"><button class="btn">Save</button></div></form>
+      <form id="remF" class="field"><label>Away-from-home address — your Tailscale address</label>
+        <div class="btn-row" style="flex-wrap:nowrap"><input class="input" name="u" value="${esc(set.remoteUrl || '')}" placeholder="http://100.101.102.103:8420 or https://zimaos.your-name.ts.net"><button class="btn">Save</button></div>
+        <p class="hint" style="margin:6px 0 0">Find it in the Tailscale app: tap your Zima and copy its 100.x.x.x address, then add :8420. If you set up Tailscale so your home address works everywhere (a “subnet route”), leave this empty.</p></form>
     </div>
 
     <div class="panel">
-      <h2>Backups</h2><p class="hint">Profiles, PINs, watch history, My Lists, family lists and settings — not your media files. Artwork you uploaded, scrub previews, downloaded subtitles and face names live next to the database and are not inside this file. A backup is also saved automatically every night (last 7 kept).</p>
+      <h2>Notifications & casting</h2>
+      <form id="hookF" class="field"><label>Webhook (optional) — get a message in JARVIS, Discord, Slack or ntfy when new things arrive</label>
+        <div class="btn-row" style="flex-wrap:nowrap"><input class="input" name="u" value="${esc(set.webhookUrl)}" placeholder="https://…"><button class="btn">Save</button></div></form>
+    </div>
+
+    <div class="panel">
+      <h2>Backups</h2><p class="hint">Profiles, PINs, watch history, My Lists, family lists and settings — not your media files. A backup is also saved automatically every night (last 7 kept).</p>
       <div class="btn-row"><a class="btn small primary" href="/api/admin/backup" download>${ICON.download} Download backup</a>
         <label class="btn small">Restore from file…<input type="file" accept=".json,application/json" id="restoreFile" hidden></label></div>
       ${o.backups.length ? `<div class="list" style="margin-top:10px">${o.backups.map(b => `<div class="list-item"><div class="grow"><div class="t">${esc(b.name)}</div><div class="s">${fmtBytes(b.size)}</div></div><a class="btn small" href="/api/admin/backups/${encodeURIComponent(b.name)}" download>${ICON.download}</a></div>`).join('')}</div>` : ''}
@@ -261,6 +271,8 @@ function adminPanels(o) {
 
     <div class="panel">
       <h2>Server</h2>
+      <div class="field"><label>Holiday themes — colours, a countdown and holiday picks on Home for the month of each holiday</label>
+        <select class="select" id="holMode">${[['auto', 'Automatic (by the month)'], ['off', 'Off'], ['australia-day', 'Keep on: Australia Day 🇦🇺'], ['valentines', "Keep on: Valentine's Day 💝"], ['st-patricks', "Keep on: St Patrick's Day ☘️"], ['easter', 'Keep on: Easter 🐣'], ['mothers-day', "Keep on: Mother's Day 💐"], ['fathers-day', "Keep on: Father's Day 🏆"], ['halloween', 'Keep on: Halloween 🎃'], ['christmas', 'Keep on: Christmas 🎄']].map(([k, l]) => `<option value="${k}" ${(set.holidayMode || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <form id="nameF" class="field"><label>Server name</label><div class="btn-row" style="flex-wrap:nowrap"><input class="input" name="n" value="${esc(o.serverName)}" maxlength="40"><button class="btn">Save</button></div></form>
       <div class="facts" style="margin-top:4px">
         <b>Transcoding</b><span>${o.transcoding.hwaccel === 'none' ? 'Software (CPU)' : `Intel/AMD GPU (${esc(o.transcoding.hwaccel)})${o.transcoding.hwAvailable === false ? ' — <span style="color:#ff9a87">not working, using CPU</span>' : ''}`}</span>
@@ -287,9 +299,11 @@ function wireAdmin(o, redraw) {
     catch (err) { toast(err.message, 4000); }
   };
   const saveSetting = async (body, msg = 'Saved') => { try { await api('/api/admin/settings', { method: 'PUT', body }); toast(msg); } catch (e) { toast(e.message, 4000); } };
+  $('#holMode').onchange = async e => { await saveSetting({ holidayMode: e.target.value }, 'Holiday theme saved'); await refreshMe(); ROUTES.settings(); };
   $('#nameF').onsubmit = async e => { e.preventDefault(); await saveSetting({ serverName: new FormData(e.target).get('n') }); await refreshMe(); ROUTES.settings(); };
   $('#hookF').onsubmit = e => { e.preventDefault(); saveSetting({ webhookUrl: new FormData(e.target).get('u') }); };
   $('#lanF').onsubmit = e => { e.preventDefault(); saveSetting({ lanUrl: new FormData(e.target).get('u') }); };
+  $('#remF').onsubmit = e => { e.preventDefault(); saveSetting({ remoteUrl: new FormData(e.target).get('u') }); };
   $('#trickOn').onchange = e => saveSetting({ trickplay: e.target.checked }, e.target.checked ? 'Making scrub previews in the background' : 'Turned off');
   $('#reqAuto').onchange = e => saveSetting({ requestsAuto: e.target.checked });
   $('#osF').onsubmit = e => { e.preventDefault(); const f = new FormData(e.target); saveSetting({ osApiKey: f.get('key'), osLanguages: f.get('langs'), osUsername: f.get('user'), osPassword: f.get('pass') }); };
