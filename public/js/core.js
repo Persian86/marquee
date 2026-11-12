@@ -58,6 +58,7 @@ const ICON = {
   moon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>',
   share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg>',
+  podcast: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
 };
 const LOGO = '<svg class="mark" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#f0b429"/><path d="M11.5 9.5v13l11-6.5z" fill="#1a1203"/><g fill="#1a1203"><circle cx="5.5" cy="8" r="1.3"/><circle cx="5.5" cy="13.3" r="1.3"/><circle cx="5.5" cy="18.7" r="1.3"/><circle cx="5.5" cy="24" r="1.3"/><circle cx="26.5" cy="8" r="1.3"/><circle cx="26.5" cy="24" r="1.3"/></g></svg>';
@@ -102,7 +103,8 @@ const avatar = (p, size = 32, radius = 9) => `<span class="avatar" style="backgr
 
 function fallbackArt(title, sub) {
   const h = hue(title);
-  return `<div class="fallback" style="background:linear-gradient(160deg,hsl(${h} 42% 30%),hsl(${(h + 40) % 360} 48% 12%))">${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
+  const initial = [...String(title || '?').replace(/^(the|a|an)s+/i, '').trim()][0]?.toUpperCase() || '?';
+  return `<div class="fallback" data-i="${esc(initial)}" style="background:linear-gradient(160deg,hsl(${h} 42% 30%),hsl(${(h + 40) % 360} 48% 12%))">${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
 }
 
 // ---------- big grids ----------
@@ -187,7 +189,7 @@ function navItems() {
   if (s.music) items.push(['music', '#/music', ICON.music, 'Music']);
   if (s.photos) items.push(['photos', '#/photos', ICON.photo, 'Photos']);
   if (s.home) items.push(['homevideos', '#/home-videos', ICON.camera, 'Home Videos']);
-  if (s.podcasts && !me?.isKids) items.push(['podcasts', '#/podcasts', ICON.bell, 'Podcasts']);
+  if (s.podcasts && !me?.isKids) items.push(['podcasts', '#/podcasts', ICON.podcast, 'Podcasts']);
   return items;
 }
 function shell(active, inner, { transparent = false } = {}) {

@@ -109,7 +109,8 @@ main { padding-bottom: calc(88px + var(--safe-b)); min-height: 100dvh; }
 .row-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 var(--gutter); margin-bottom: 10px; }
 .row-head h2 { margin: 0; font-family: var(--display); font-size: 19px; font-weight: 750; letter-spacing: -.005em; }
 .row-head a { color: var(--muted); font-size: 13px; font-weight: 600; }
-.scroller { display: grid; grid-auto-flow: column; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px var(--gutter) 8px;
+/* Extra top/bottom room so the enlarged TV focus ring isn't clipped by the scroll area */
+.scroller { display: grid; grid-auto-flow: column; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 12px var(--gutter) 14px; margin: -8px 0 -6px;
   scroll-padding: 0 var(--gutter); scrollbar-width: none; overscroll-behavior-x: contain; }
 .scroller::-webkit-scrollbar { display: none; }
 .scroller > * { scroll-snap-align: start; }
@@ -120,12 +121,18 @@ main { padding-bottom: calc(88px + var(--safe-b)); min-height: 100dvh; }
 .card { position: relative; display: block; border-radius: var(--radius); }
 .poster { position: relative; aspect-ratio: 2 / 3; border-radius: var(--radius); overflow: hidden; background: var(--bg-3); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
 .poster img, .thumb img { width: 100%; height: 100%; object-fit: cover; }
-.card:hover .poster, .card:hover .thumb { outline: 2px solid rgba(240, 180, 41, .8); outline-offset: 2px; }
+/* Hover only where there's a real pointer: on touch screens and TVs it would stick after a tap and fight the remote focus ring */
+@media (hover: hover) { .card:hover .poster, .card:hover .thumb { outline: 2px solid rgba(240, 180, 41, .8); outline-offset: 2px; } }
+body.tv-nav .card:hover .poster, body.tv-nav .card:hover .thumb { outline: none; }
 .card .cap { margin-top: 8px; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .sub { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fallback { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 12px; font-family: var(--display);
   font-weight: 800; font-size: 17px; line-height: 1.1; letter-spacing: -.01em; text-wrap: balance; }
 .fallback small { font-family: var(--font); font-weight: 600; font-size: 12px; opacity: .7; margin-top: 4px; }
+/* Cards already print the title underneath, so their placeholder art shows a big initial instead of the title again */
+.card .fallback, .thumb .fallback { font-size: 0; justify-content: center; align-items: center; }
+.card .fallback small, .thumb .fallback small { display: none; }
+.card .fallback::before, .thumb .fallback::before { content: attr(data-i); font: 800 clamp(40px, 9vw, 64px)/1 var(--display); color: rgba(255, 255, 255, .24); }
 .badge { position: absolute; top: 8px; right: 8px; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 99px; background: var(--accent);
   color: var(--accent-ink); font-weight: 800; font-size: 12px; display: grid; place-items: center; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
 .badge.done { background: rgba(13, 11, 9, .75); color: var(--accent); padding: 0; width: 24px; }
@@ -150,7 +157,7 @@ main { padding-bottom: calc(88px + var(--safe-b)); min-height: 100dvh; }
   background-repeat: no-repeat; background-position: right 10px center; background-size: 14px; }
 .count { color: var(--muted); font-size: 13px; margin-left: auto; }
 .grid-more { height: 1px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 18px 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 18px 12px; }
 @media (min-width: 720px) { .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 24px 18px; } }
 
 /* ---------- detail ---------- */
@@ -177,7 +184,7 @@ main { padding-bottom: calc(88px + var(--safe-b)); min-height: 100dvh; }
 .seasons::-webkit-scrollbar { display: none; }
 .episodes { padding: 0 var(--gutter); display: grid; gap: 4px; max-width: 980px; }
 .ep { display: grid; grid-template-columns: 148px 1fr auto; gap: 14px; align-items: center; padding: 10px; margin: 0 -10px; border-radius: 14px; }
-.ep:hover { background: rgba(255, 255, 255, .04); }
+@media (hover: hover) { .ep:hover { background: rgba(255, 255, 255, .04); } }
 @media (min-width: 720px) { .ep { grid-template-columns: 210px 1fr auto; } }
 .ep .thumb { cursor: pointer; }
 .ep h3 { margin: 0 0 3px; font-size: 15px; font-weight: 700; }
@@ -342,7 +349,8 @@ select.input { appearance: none; -webkit-appearance: none; }
 .p-error p { color: #cfc5b6; }
 
 /* ======================= v2 additions ======================= */
-.chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.chip svg { width: 16px; height: 16px; flex: none; }
 a.chip { text-decoration: none; }
 .icon-btn.bell { position: relative; }
 .icon-btn .dot { position: absolute; top: 9px; right: 10px; width: 8px; height: 8px; border-radius: 9px; background: var(--danger); box-shadow: 0 0 0 2px var(--bg); }
@@ -364,7 +372,7 @@ a.chip { text-decoration: none; }
 .tile { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 18px; background: var(--bg-2); border: 1px solid var(--line); font-weight: 650; min-height: 104px; justify-content: space-between; }
 .tile svg { width: 26px; height: 26px; color: var(--accent); }
 .tiles.small .tile { min-height: 0; flex-direction: row; align-items: center; padding: 14px 16px; }
-.tile:hover { border-color: rgba(240, 180, 41, .5); }
+@media (hover: hover) { .tile:hover { border-color: rgba(240, 180, 41, .5); } }
 
 /* cards: people, albums, collections */
 .scroller.people { grid-auto-columns: clamp(96px, 26vw, 128px); }
@@ -469,7 +477,7 @@ body.has-mini main { padding-bottom: calc(160px + var(--safe-b)); }
 @media (min-width: 720px) { .photo-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; } }
 .ph { aspect-ratio: 1; overflow: hidden; border-radius: 6px; background: var(--bg-3); }
 .ph img { width: 100%; height: 100%; object-fit: cover; transition: transform .25s; }
-.ph:hover img { transform: scale(1.04); }
+@media (hover: hover) { .ph:hover img { transform: scale(1.04); } }
 .lightbox { position: fixed; inset: 0; z-index: 250; background: #000; display: grid; place-items: center; touch-action: pan-y; }
 .lightbox #lbImg { max-width: 100vw; max-height: 100dvh; object-fit: contain; transition: opacity .25s; }
 .lightbox #lbImg.fading { opacity: .3; }

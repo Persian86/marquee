@@ -86,7 +86,9 @@ function seedLibraries() {
   if (db.prepare('SELECT COUNT(*) AS n FROM libraries').get().n > 0) return;
   const names = { movie: 'Movies', tv: 'TV Shows', home: 'Home Videos', music: 'Music', photo: 'Photos' };
   for (const pair of config.DEFAULT_LIBRARIES.split(',')) {
-    const [type, p] = pair.split(':').map(s => s && s.trim());
+    // Split on the first ':' only, so Windows paths like "movie:C:MediaMovies" survive
+    const i = pair.indexOf(':');
+    const [type, p] = i < 0 ? [pair.trim(), ''] : [pair.slice(0, i).trim(), pair.slice(i + 1).trim()];
     if (!names[type] || !p || !fs.existsSync(p)) continue;
     try { if (!fs.readdirSync(p).length && !['movie', 'tv'].includes(type)) continue; } catch { continue; }
     // Family content (home videos, music, photos) is visible to kids profiles by default

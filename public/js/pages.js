@@ -334,7 +334,7 @@ ROUTES.item = async id => {
       const img = e.still || x.backdrop;
       const saved = Downloads.isSaved(e.id);
       return `<div class="ep">
-        <a class="thumb" href="#/play/${e.id}">${img ? `<img src="${img}" alt="" loading="lazy">` : fallbackArt(e.title)}<span class="play-ico">${ICON.play}</span>${pct ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}</a>
+        <a class="thumb" href="#/play/${e.id}">${img ? `<img src="${img}" alt="" loading="lazy">` : fallbackArt(x.title)}<span class="play-ico">${ICON.play}</span>${pct ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}</a>
         <a class="ep-text" href="#/play/${e.id}"><div class="ep-meta">${e.episode != null ? `Episode ${e.episode}` : 'Extra'}${e.duration ? ` · ${Math.round(e.duration / 60)}m` : ''}${e.airDate ? ` · ${fmtDate(e.airDate)}` : ''}${saved ? ' · <span style="color:var(--accent)">Downloaded</span>' : ''}</div>
           <h3>${esc(e.title)}</h3>${e.overview ? `<p>${esc(e.overview)}</p>` : ''}</a>
         <div class="ep-actions"><button class="check dl" data-dl="${e.id}" aria-label="Download">${ICON.download}</button>
@@ -633,7 +633,7 @@ ROUTES.more = async () => {
   const tiles = [
     ['#/my-list', ICON.bookmark, 'My List'], ['#/collections', ICON.stack, 'Collections'],
     s.requests && ['#/requests', ICON.plus, 'Request a movie or show'],
-    s.music && ['#/music', ICON.music, 'Music'], s.podcasts && ['#/podcasts', ICON.bell, 'Podcasts'],
+    s.music && ['#/music', ICON.music, 'Music'], s.podcasts && ['#/podcasts', ICON.podcast, 'Podcasts'],
     s.photos && ['#/photos', ICON.photo, 'Photos'], s.home && ['#/home-videos', ICON.camera, 'Home Videos'],
     ['#/movienight', ICON.popcorn, 'Movie night'], s.photos && ['#/memories', ICON.photo, 'Memories'],
     ['#/downloads', ICON.download, 'Downloads'], ['#/remote', ICON.cast, 'Remote control'], ['#/party', ICON.users, 'Join a watch party'],
