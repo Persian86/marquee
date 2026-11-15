@@ -5,11 +5,11 @@ const devices = new Map(); // clientId -> device
 function connect({ clientId, profile, name, res }) {
   const prev = devices.get(clientId);
   if (prev?.res) try { prev.res.end(); } catch {}
-  const d = { clientId, name: String(name || 'Device').slice(0, 60), profileId: profile.id, profileName: profile.name, profileColor: profile.color, res, state: prev?.state || null, seen: Date.now() };
+  const d = { connectionId: require('crypto').randomUUID(), clientId, name: String(name || 'Device').slice(0, 60), profileId: profile.id, profileName: profile.name, profileColor: profile.color, res, state: prev?.state || null, seen: Date.now() };
   devices.set(clientId, d);
   const ping = setInterval(() => { try { res.write(`event: ping\ndata: {}\n\n`); } catch {} }, 25000);
   res.on('close', () => { clearInterval(ping); if (devices.get(clientId)?.res === res) devices.delete(clientId); });
-  res.write(`event: hello\ndata: ${JSON.stringify({ clientId })}\n\n`);
+  res.write(`event: hello\ndata: ${JSON.stringify({ clientId, connectionId: d.connectionId })}\n\n`);
 }
 
 function update(clientId, state) {
@@ -22,10 +22,20 @@ function list(profile, exceptId) {
     .map(d => ({ clientId: d.clientId, name: d.name, profileName: d.profileName, profileColor: d.profileColor, state: d.state }));
 }
 
+function resolve(profile, clientId, connectionId) {
+  const d = devices.get(clientId);
+  if (!d || (!profile.is_admin && d.profileId !== profile.id)) throw new Error('That exact screen is not connected or permitted');
+  if (!connectionId || d.connectionId !== connectionId) throw new Error('That screen reconnected. Ask Ghost again.');
+  return { clientId: d.clientId, name: d.name, profileId: d.profileId, connectionId: d.connectionId };
+}
+
 function command(profile, clientId, cmd) {
   const d = devices.get(clientId);
   if (!d || (!profile.is_admin && d.profileId !== profile.id)) throw new Error('That device is no longer connected');
-  d.res.write(`event: command\ndata: ${JSON.stringify({ ...cmd, from: profile.name })}\n\n`);
+  if (cmd.targetConnectionId && cmd.targetConnectionId !== d.connectionId) throw new Error('That screen reconnected');
+  const requestId = require('crypto').randomUUID();
+  d.res.write(`event: command\ndata: ${JSON.stringify({ ...cmd, requestId, from: profile.name })}\n\n`);
+  return requestId;
 }
 
-module.exports = { connect, update, list, command };
+module.exports = { connect, update, list, command, resolve };

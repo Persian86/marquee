@@ -157,8 +157,9 @@ r.get('/movienight/:code/event.ics', (req, res) => {
 });
 
 // ---------- voice assistants ----------
+r.get('/assistant/capabilities', (req, res) => res.json({ strictClientTarget: 1, ghostHold: 1 }));
 r.post('/assistant', C.wrap(async (req, res) => {
-  try { res.json(await assistant.handle(req.profile, String(req.body?.text || ''), { device: req.body?.device || null })); }
+  try { res.json(await assistant.handle(req.profile, String(req.body?.text || ''), { device: req.body?.device || null, targetClientId: req.body?.targetClientId ?? null, targetConnectionId: req.body?.targetConnectionId ?? null, voiceCallId: req.body?.voiceCallId ?? null })); }
   catch (e) { res.json({ ok: false, speech: e.message }); }
 }));
 

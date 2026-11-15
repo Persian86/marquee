@@ -60,16 +60,18 @@ const Devices = (() => {
     if (/Windows/.test(ua)) return 'Windows PC';
     return 'Browser';
   };
-  let es = null, lastReport = 0;
+  let es = null, lastReport = 0, connectionId = null;
   const name = () => store.get('mq_device_name') || guess();
   function connect() {
     if (!me || es || offline) return;
     es = new EventSource(`/api/devices/events?clientId=${encodeURIComponent(clientId)}&name=${encodeURIComponent(name())}`);
+    es.addEventListener('hello', e => { connectionId = JSON.parse(e.data).connectionId || null; });
     es.addEventListener('command', e => handle(JSON.parse(e.data)));
     es.onerror = () => { if (es && es.readyState === EventSource.CLOSED) { es = null; } };
   }
-  function reconnect() { if (es) es.close(); es = null; connect(); }
+  function reconnect() { connectionId = null; if (es) es.close(); es = null; connect(); }
   function handle(c) {
+    if (window.GhostMarquee?.intercept(c)) return;
     const p = window.__player;
     if (c.type === 'open') { toast(`${c.from} sent something to this screen`); go(`#/play/${c.itemId}${c.position ? `?t=${Math.floor(c.position)}` : ''}`); return; }
     if (p) {
@@ -95,7 +97,7 @@ const Devices = (() => {
       : '<p class="hint">No other screens found. Open Marquee on the TV or another device first — it shows up here automatically.</p>'}`);
     $$('[data-d]', m.el).forEach(b => b.onclick = async () => { m.close(); try { await cb(list[+b.dataset.d]); } catch (e) { toast(e.message); } });
   }
-  return { clientId, connect, reconnect, report, pick, name, guess };
+  return { clientId, connect, reconnect, report, pick, name, guess, dispatch: handle, connectionId: () => connectionId, connected: () => !!es && es.readyState === EventSource.OPEN && !!connectionId };
 })();
 setInterval(() => Devices.connect(), 3000);
 setInterval(() => { if (me && !offline) Downloads.syncSmart().catch(() => {}); }, 30 * 60000);
