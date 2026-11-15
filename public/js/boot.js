@@ -3,6 +3,9 @@
 
 // Arrow keys move between buttons/cards like a TV app; OK/Enter selects; Back goes back.
 (() => {
+  const tv = /MarqueeTV/.test(navigator.userAgent);
+  document.body.classList.toggle('tv-layout', tv);
+  if (tv) document.body.classList.add('tv-nav');
   const FOCUSABLE = 'a[href], button:not([disabled]), select, input, [tabindex="0"]';
   const visible = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
   function move(dir) {
@@ -25,12 +28,13 @@
       const score = main + cross * 2.5;
       if (score < bestScore) { bestScore = score; best = el; }
     }
-    if (best) { best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); }
+    if (best) { best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: tv || matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
   }
   addEventListener('keydown', e => {
     if (location.hash.startsWith('#/play')) return; // the player handles its own keys
     const t = e.target;
     const typing = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
+    if (typing) return; // Preserve text editing and native select controls.
     const map = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up' };
     if (map[e.key] && !(typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight'))) {
       if (document.querySelector('.lightbox') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
@@ -43,7 +47,7 @@
       e.preventDefault();
     }
   });
-  addEventListener('pointerdown', () => document.body.classList.remove('tv-nav'));
+  addEventListener('pointerdown', () => { if (!tv) document.body.classList.remove('tv-nav'); });
 })();
 
 // ---------- this screen as a remote-controllable device ----------

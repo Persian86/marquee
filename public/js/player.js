@@ -49,6 +49,24 @@ ROUTES.play = async id => {
   let roomCode = ps.get('room');
   MiniPlayer.pauseForVideo();
 
+  if (!offlineMode && !roomCode && ps.get('web') !== '1' && !me.cinemaMode && !store.get('mq_night', false) &&
+      store.get('mq_native_player', false) && window.MarqueeNative?.openVideo) {
+    const playHash = location.hash;
+    const standard = t => go('#/play/' + id + '?web=1' + (Number.isFinite(t) && t > 0 ? '&t=' + t : ''), true);
+    window.__nativeVideoClosed = result => {
+      if (location.hash !== playHash) return;
+      if (result?.fallback) standard(result.position); else go('#/item/' + id, true);
+    };
+    onLeave(() => { delete window.__nativeVideoClosed; });
+    app.innerHTML = '<div class="page"><h1 class="page-title">Opening TV player…</h1>' + loading() + '<button class="btn" id="nativeFallback">Use standard player</button></div>';
+    $('#nativeFallback').onclick = () => standard(explicitStart);
+    let opened = false;
+    try { opened = MarqueeNative.openVideo(JSON.stringify({itemId: +id, deviceId, quality: qualityPref(), start: explicitStart ?? -1,
+      subLang: me.subLang || 'en', subtitlesOn: !!store.get('mq_subs_on', null), autoSkip: !!me.autoSkipIntro, isKids: !!me.isKids})); } catch {}
+    if (opened) return;
+    delete window.__nativeVideoClosed;
+  }
+
   app.innerHTML = `<div class="player" id="pl">
     <video id="v" playsinline webkit-playsinline preload="auto" x-webkit-airplay="allow"></video>
     <div class="p-status" id="pst"><div class="spinner"></div></div>

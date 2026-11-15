@@ -51,6 +51,7 @@ function probe(file) {
             pix_fmt: v?.pix_fmt || null,
             profile: v?.profile || null,
             hdr: /smpte2084|arib-std-b67/.test(v?.color_transfer || ''),
+            color_transfer: v?.color_transfer || null,
             coverArt: streams.some(s => s.disposition?.attached_pic),
             chapters: (j.chapters || []).map(c => ({ start: +c.start_time, end: +c.end_time, title: c.tags?.title || '' })),
             tags, audio, subs,
@@ -268,8 +269,16 @@ async function scanLibrary(lib) {
     seen.add(file);
     let st;
     try { st = fs.statSync(file); } catch { continue; }
-    const existing = db.prepare('SELECT id, size, mtime FROM items WHERE path = ?').get(file);
-    if (existing && existing.size === st.size && existing.mtime === Math.floor(st.mtimeMs)) continue;
+    const existing = db.prepare('SELECT id, size, mtime, probe FROM items WHERE path = ?').get(file);
+    if (existing && existing.size === st.size && existing.mtime === Math.floor(st.mtimeMs)) {
+      let cached;
+      try { cached = JSON.parse(existing.probe || 'null'); } catch {}
+      if (cached?.hdr && !Object.prototype.hasOwnProperty.call(cached, 'color_transfer')) {
+        const updated = await probe(file);
+        if (updated) db.prepare('UPDATE items SET probe = ? WHERE id = ?').run(JSON.stringify(updated), existing.id);
+      }
+      continue;
+    }
 
     const rel = path.relative(lib.path, file);
     const parts = rel.split(path.sep);

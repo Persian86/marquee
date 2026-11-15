@@ -46,10 +46,12 @@ function decide(item, quality, caps, audioIndex, burnSub = null, readyVersion = 
   const audioOk = !ac || ['aac', 'mp3', 'opus', 'vorbis', 'flac'].includes(ac) || (ac === 'ac3' && caps.ac3) || (ac === 'eac3' && caps.eac3);
   const containerOk = /mp4|mov/.test(fmt) || (fmt.includes('webm') && ['vp8', 'vp9', 'av1'].includes(vc)) || (fmt.includes('matroska') && caps.mkv);
   const withinQuality = quality === 'original' || (height > 0 && height <= q.height && (!bitrate || bitrate <= q.bitrate * 1.15));
+  const hdrOk = !p.hdr || (p.color_transfer === 'smpte2084' && caps.hdr10 === true) ||
+    (p.color_transfer === 'arib-std-b67' && caps.hlg === true);
   const defaultAudio = audioIndex == null || audioIndex === 0 || (p.audio || []).length <= 1;
 
   if (burnSub == null && !noDirect) {
-    if (videoOk && audioOk && containerOk && withinQuality && defaultAudio && !p.hdr) return { mode: 'direct' };
+    if (videoOk && audioOk && containerOk && withinQuality && defaultAudio && hdrOk) return { mode: 'direct' };
     // A pre-converted copy is ready — play that instantly instead of converting live
     if (readyVersion && defaultAudio && caps.h264 !== false) return { mode: 'version', version: readyVersion };
   }
@@ -57,7 +59,7 @@ function decide(item, quality, caps, audioIndex, burnSub = null, readyVersion = 
   // HLS. Copy the video stream when we can (almost free), otherwise re-encode.
   const copyVideo = burnSub == null && vc === 'h264' && (p.pix_fmt || 'yuv420p') === 'yuv420p' && withinQuality && !p.hdr;
   const copyAudio = ac === 'aac' && (audio?.channels || 2) <= 2;
-  return { mode: 'hls', copyVideo, copyAudio, reason: burnSub != null ? 'subtitles' : !videoOk ? 'video' : !audioOk ? 'audio' : !containerOk ? 'container' : !withinQuality ? 'bandwidth' : 'audio track' };
+  return { mode: 'hls', copyVideo, copyAudio, reason: burnSub != null ? 'subtitles' : !videoOk ? 'video' : !audioOk ? 'audio' : !containerOk ? 'container' : !withinQuality ? 'bandwidth' : !hdrOk ? 'hdr' : 'audio track' };
 }
 
 function targetSize(p, q) {
@@ -125,8 +127,9 @@ function startSession(item, opts) {
   // One stream per device; also cap total transcodes
   for (const [id, s] of sessions) if (s.deviceId === opts.deviceId) stopSession(id);
   if (sessions.size >= MAX_TRANSCODES) {
-    const oldest = [...sessions.values()].sort((a, b) => a.lastAccess - b.lastAccess)[0];
-    if (oldest) stopSession(oldest.id);
+    const error = new Error('The server is busy converting other videos. Try again when someone finishes, or play a compatible original file.');
+    error.status = 503;
+    throw error;
   }
   const id = crypto.randomBytes(8).toString('hex');
   const dir = path.join(TRANSCODE_DIR, id);
@@ -145,6 +148,14 @@ function launch(s, useHw) {
   let stderr = '';
   const startedAt = Date.now();
   proc.stderr.on('data', d => { stderr = (stderr + d).slice(-4000); });
+  proc.on('error', error => {
+    if (s.proc !== proc || s.killed) return;
+    s.proc = null;
+    s.error = error.code === 'ENOENT'
+      ? 'The video converter is unavailable. Install ffmpeg on the server, then try again.'
+      : 'The video converter could not start. Please try again.';
+    console.error('Could not start transcoder:', error.message);
+  });
   proc.on('exit', code => {
     if (s.proc !== proc) return;
     s.proc = null;

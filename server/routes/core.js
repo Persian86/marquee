@@ -421,6 +421,7 @@ r.post('/play/:id', (req, res) => {
   const sourceHeight = stream.sourceHeight(row);
   const ready = versions.bestReady(row.id, q.height, Math.min(sourceHeight || 1080, 1080));
   const decision = stream.decide(row, quality, caps, audioIndex | 0, burn ? +burn.key.slice(4) : null, night ? null : ready, !!forceStream || !!night || !!forceTranscode);
+  if (req.body?.directOnly && decision.mode === 'hls') return res.status(409).json({error: 'Use the standard player for this video'});
   // The device said it couldn't play the file as it is (e.g. 10-bit or very high-bitrate video), so fully convert it
   if (forceTranscode && decision.mode === 'hls') { decision.copyVideo = false; decision.copyAudio = false; decision.reason = 'device'; }
   const base = {

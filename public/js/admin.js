@@ -27,6 +27,82 @@ const Push = {
   },
 };
 
+// Separate settings into navigable tiles without recreating the existing controls.
+function settingsTiles(root) {
+  root._settingsObserver?.disconnect();
+  root.parentElement.querySelector('.settings-back')?.remove();
+  const section = location.hash.split('?')[0].split('/')[2] || '';
+  const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const sections = [];
+  const add = (node, title, description, icon = ICON.settings) => {
+    node.dataset.settingsSection = slug(title);
+    sections.push({node, title, description, icon, key: slug(title)});
+  };
+  const personal = root.querySelector(':scope > .panel');
+  const groups = [
+    ['Your profile', 'Switch profiles, downloads and your year in Marquee', ICON.user, ['switch', '#/downloads', '#/wrapped']],
+    ['Playback', 'Streaming quality, cinema mode, theme songs and intro skipping', ICON.play, ['qpref', 'cinema', 'themes', 'autoskip', 'nativePlayer']],
+    ['Appearance', 'Holiday decorations on this device', ICON.star, ['holFx']],
+    ['This device', 'Device name, notifications, addresses and app updates', ICON.tv, ['devName', 'push', 'appServer']],
+    ['Subtitle preferences', 'Automatic subtitles and your preferred language', ICON.film, ['autoSubs']],
+    ['Accounts & devices', 'Signed-in devices, Trakt and Letterboxd', ICON.lock, ['#/devices', 'traktB', '/api/letterboxd.csv']],
+  ];
+  if (personal) {
+    for (const [title, description, icon, controls] of groups) {
+      const panel = document.createElement('div'); panel.className = 'panel';
+      for (const control of controls) {
+        const target = control.includes('/') ? personal.querySelector('a[href="' + control + '"]') : personal.querySelector('#' + control);
+        const row = target?.closest('.list-item');
+        if (row) panel.append(row);
+      }
+      if (panel.children.length) { personal.before(panel); add(panel, title, description, icon); }
+    }
+    if (personal.children.length) add(personal, 'Other preferences', 'More settings for your profile');
+    else personal.remove();
+  }
+  for (const node of [...root.children]) {
+    if (node.dataset.settingsSection || node.id === 'extrasPanels') continue;
+    if (node.classList.contains('panel')) {
+      const title = node.querySelector('h2')?.textContent.trim() || 'Server settings';
+      add(node, title, node.querySelector('.hint')?.textContent.trim() || 'Manage ' + title.toLowerCase());
+    } else node.dataset.settingsOverview = 'true';
+  }
+  const menu = document.createElement('div'); menu.className = 'settings-menu';
+  menu.innerHTML = '<p class="hint">Choose a setting to open it.</p><label class="field"><span>Find a setting</span><input class="input" type="search" placeholder="Search settings…" autocomplete="off"></label><div class="settings-grid"></div><p class="hint settings-no-results" hidden>No settings match your search.</p>';
+  root.prepend(menu);
+  const back = document.createElement('a'); back.className = 'back-link settings-back'; back.href = '#/settings'; back.innerHTML = ICON.arrowLeft + ' All settings'; root.before(back);
+  const heading = root.parentElement.querySelector('.page-title'); heading.tabIndex = -1;
+  const notice = document.createElement('p'); notice.className = 'hint'; root.append(notice);
+  const filter = () => {
+    const query = menu.querySelector('input').value.trim().toLowerCase();
+    const tiles = [...menu.querySelectorAll('.settings-tile')];
+    tiles.forEach(tile => { tile.hidden = !tile.dataset.search.includes(query); });
+    menu.querySelector('.settings-no-results').hidden = tiles.some(tile => !tile.hidden);
+  };
+  menu.querySelector('input').oninput = filter;
+  const refresh = () => {
+    const extras = root.querySelector('#extrasPanels');
+    const all = [...sections];
+    if (extras) for (const node of extras.querySelectorAll(':scope > .panel')) {
+      const title = node.querySelector('h2')?.textContent.trim();
+      if (title) all.push({node, title, description: node.querySelector('.hint')?.textContent.trim() || 'Manage ' + title.toLowerCase(), icon: ICON.settings, key: slug(title)});
+    }
+    const active = all.find(item => item.key === section);
+    menu.hidden = !!section; back.hidden = !section; heading.textContent = active?.title || 'Settings';
+    root.parentElement.classList.toggle('settings-hub', !section);
+    all.forEach(item => { item.node.hidden = item !== active; });
+    root.querySelectorAll('[data-settings-overview]').forEach(node => { node.hidden = !!section; });
+    menu.querySelector('.settings-grid').innerHTML = all.map(item => '<a class="tile settings-tile" href="#/settings/' + item.key + '" data-search="' + esc(item.title.toLowerCase() + ' ' + item.description.toLowerCase()) + '"><span aria-hidden="true">' + item.icon + '</span><span class="settings-tile-title">' + esc(item.title) + '</span><span class="settings-tile-description">' + esc(item.description) + '</span></a>').join('');
+    filter();
+    notice.hidden = !section || !!active;
+    notice.textContent = extras && !extras.children.length ? 'Loading this setting…' : 'This setting is unavailable for your profile. Choose another from All settings.';
+  };
+  refresh();
+  const extras = root.querySelector('#extrasPanels');
+  if (extras) { const observer = new MutationObserver(refresh); root._settingsObserver = observer; observer.observe(extras, {childList: true}); onLeave(() => observer.disconnect()); }
+  if (section && !matchMedia('(pointer: coarse)').matches) heading.focus({preventScroll: true});
+}
+
 ROUTES.settings = async () => {
   shell('settings', `<div class="page settings"><h1 class="page-title">Settings</h1><div id="s">${loading()}</div></div>`);
   let pushOn = false;
@@ -43,6 +119,7 @@ ROUTES.settings = async () => {
           <button class="btn small" id="switch">Switch profile</button></div>
         <div class="list-item"><div class="grow"><div class="t">Streaming quality on every device</div><div class="s">Fixed at 1080p. Playback will buffer or show an error rather than reduce quality.</div></div>
           <select class="select" id="qpref" disabled>${[['1080', '1080p · fixed']].map(([k, l]) => `<option value="${k}" ${qp === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        ${window.MarqueeNative?.openVideo && window.MarqueeNative.isTv?.() ? `<div class="list-item"><div class="grow"><div class="t">Native TV player (preview)</div><div class="s">Play compatible originals with Android's video player. Videos needing conversion, watch parties and cinema mode use the standard player.</div></div><label class="switch"><input type="checkbox" id="nativePlayer" ${store.get('mq_native_player', false) ? 'checked' : ''}><span></span></label></div>` : ''}
         <div class="list-item"><div class="grow"><div class="t">Cinema mode</div><div class="s">A couple of trailers from your library before a movie, like at the pictures</div></div>
           <label class="switch"><input type="checkbox" id="cinema" ${me.cinemaMode ? 'checked' : ''}><span></span></label></div>
         <div class="list-item"><div class="grow"><div class="t">Theme songs</div><div class="s">Play a show's theme quietly when you open it</div></div>
@@ -66,8 +143,10 @@ ROUTES.settings = async () => {
         <div class="list-item"><div class="grow"><div class="t">Your year in Marquee</div><div class="s">Hours watched, favourites and biggest binges</div></div><a class="btn small" href="#/wrapped">Open</a></div>
       </div>
       ${o ? adminPanels(o) : ''}`;
+    settingsTiles(s);
     $('#switch').onclick = async () => { await api('/api/logout', { method: 'POST' }); me = null; go('#/who'); };
     $('#qpref').onchange = e => { store.set('mq_quality', e.target.value); toast('Saved for this device'); };
+    if ($('#nativePlayer')) $('#nativePlayer').onchange = e => { store.set('mq_native_player', e.target.checked); toast('Saved for this TV'); };
     $('#cinema').onchange = async e => { await api('/api/me', { method: 'PATCH', body: { cinemaMode: e.target.checked } }); me.cinemaMode = e.target.checked; toast(e.target.checked ? 'Trailers before movies' : 'Cinema mode off'); };
     $('#themes').onchange = async e => { await api('/api/me', { method: 'PATCH', body: { themeMusic: e.target.checked } }); me.themeMusic = e.target.checked; if (!e.target.checked) ThemeMusic.stop(); toast('Saved'); };
     $('#holFx').onchange = e => { Holiday.setFx(e.target.checked); toast(e.target.checked ? 'Decorations on' : 'Decorations off'); };
@@ -111,7 +190,7 @@ async function traktUI() {
   if (!box) return;
   const t = await api('/api/trakt').catch(() => null);
   if (!t) return;
-  if (!t.configured) { info.textContent = me.isAdmin ? 'Add your Trakt app details further down this page to turn this on' : 'Not set up on this server yet'; return; }
+  if (!t.configured) { info.textContent = me.isAdmin ? 'Add your Trakt app details in Settings → Trakt to turn this on' : 'Not set up on this server yet'; return; }
   if (t.linked) {
     info.textContent = `Linked${t.username ? ' to ' + t.username : ''} — things you finish and rate are sent to Trakt`;
     box.innerHTML = '<div class="btn-row" style="flex-wrap:nowrap"><button class="btn small" id="tImp">Import history</button><button class="btn small" id="tOff">Unlink</button></div>';

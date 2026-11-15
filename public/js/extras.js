@@ -436,7 +436,7 @@ async function loadExtrasPanels() {
       <div class="btn-row"><button class="btn small primary" id="xAiSave">Save</button><button class="btn small" id="xAiTest">Test it</button></div></div>
 
     <div class="panel"><h2>Cinema mode & theme songs</h2>
-      <p class="hint">Each person turns cinema mode on for themselves (Settings, top of this page). Trailers come from films in your library — your own trailer files (“Movie-trailer.mp4” or a Trailers folder) or YouTube.
+      <p class="hint">Each person turns cinema mode on for themselves (Settings → Playback). Trailers come from films in your library — your own trailer files (“Movie-trailer.mp4” or a Trailers folder) or YouTube.
         For your own “feature presentation” intro, put a video in <b>/DATA/AppData/marquee/config/prerolls</b>.${x.prerolls.length ? ` Found: ${x.prerolls.map(esc).join(', ')}.` : ''}
         Theme songs: put <b>theme.mp3</b> in a show's folder, or open the show → ⋯ → Add a theme song.</p>
       <div class="list-item"><div class="grow"><div class="t">Trailers before a movie</div></div><select class="select" id="xTrailers">${[0, 1, 2, 3].map(n => `<option ${s.cinemaTrailers === n ? 'selected' : ''} value="${n}">${n || 'None'}</option>`).join('')}</select></div></div>

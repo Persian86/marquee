@@ -5,7 +5,7 @@
   --line: rgba(255, 236, 205, 0.09);
   --text: #f5efe6;
   --muted: #a99d8c;
-  --dim: #6f6556;
+  --dim: #8a7f6e;
   --accent: #f0b429;
   --accent-ink: #1a1203;
   --danger: #e5604a;
@@ -757,3 +757,39 @@ code { background: var(--bg-3); padding: 2px 6px; border-radius: 6px; font-size:
   to { transform: translate3d(0, calc(100vh + 96px), 0) rotate(300deg); }
 }
 
+
+/* Settings tile menu */
+.settings-hub { max-width: 1240px; margin-inline: auto; }
+.settings-menu { margin-bottom: 24px; }
+.settings-menu > .hint { color: var(--muted); }
+.settings-menu > .field { max-width: 440px; margin-bottom: 22px; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+.settings-tile { min-width: 0; min-height: 168px; gap: 10px; justify-content: flex-start; }
+.settings-tile-title { font-size: 16px; }
+.settings-tile-description { font-size: 13px; font-weight: 400; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.settings-tile:focus-visible, .settings-back:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.settings [hidden] { display: none !important; }
+@media (max-width: 479px) {
+  .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .settings-tile { padding: 14px; min-height: 158px; }
+  .settings-tile-title { font-size: 14px; }
+}
+/* Room-readable Android TV / Fire TV layout. */
+body.tv-layout { --gutter: clamp(36px, 4vw, 80px); font-size: 18px; }
+.tv-layout .topbar { padding-block: 18px; }
+.tv-layout .nav-links a { font-size: 18px; padding: 10px 18px; }
+.tv-layout .page { padding-top: 102px; }
+.tv-layout .page-title { font-size: 34px; }
+.tv-layout .scroller.posters { grid-auto-columns: clamp(172px, 15vw, 240px); }
+.tv-layout .scroller.wide { grid-auto-columns: clamp(300px, 28vw, 440px); }
+.tv-layout .grid { grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 22px; }
+.tv-layout .card .cap, .tv-layout .row-head h2 { font-size: 20px; }
+.tv-layout .card .sub, .tv-layout .row-head a, .tv-layout .settings-tile-description { font-size: 16px; }
+.tv-layout .icon-btn { width: 48px; height: 48px; }
+.tv-layout .settings-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+.tv-layout .settings-tile { min-height: 186px; padding: 22px; }
+.tv-layout .settings-tile-title { font-size: 20px; }
+.tv-layout .input, .tv-layout .select, .tv-layout .btn { min-height: 44px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
