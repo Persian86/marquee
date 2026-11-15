@@ -59,24 +59,24 @@ function playable(profile, row) {
   return ep ? { id: ep.id, label: `${row.title}, season ${ep.season} episode ${ep.episode}` } : null;
 }
 
-function play(profile, target, device, preferredDevice) {
+function play(profile, target, device, preferredDevice, voiceCallId) {
   const dev = device || findDevice(profile, preferredDevice);
   const check = activity.check(profile, target.id);
   if (!check.ok) return { ok: false, speech: check.message };
   if (dev) {
-    devices.command(profile, dev.clientId, { type: 'open', itemId: target.id });
-    return { ok: true, speech: `Playing ${target.label} on ${dev.name}`, action: { type: 'played-on-device', itemId: target.id, device: dev.name } };
+    const requestId = devices.command(profile, dev.clientId, { type: 'open', itemId: target.id, ...(voiceCallId ? { voiceCallId, targetConnectionId: dev.connectionId } : {}) });
+    return { ok: true, speech: `Playing ${target.label} on ${dev.name}`, action: { requestId, type: 'played-on-device', itemId: target.id, device: dev.name } };
   }
   return { ok: true, speech: `Playing ${target.label}`, action: { type: 'play', itemId: target.id, url: `marquee://play/${target.id}` } };
 }
 
-function control(profile, type, device, extra = {}) {
+function control(profile, type, device, extra = {}, voiceCallId) {
   const list = devices.list(profile).filter(d => d.state);
   const dev = device || (list.length === 1 ? list[0] : list.find(d => d.state?.playing));
   if (!dev) return { ok: false, speech: list.length ? 'Which screen? Say, for example, pause on the lounge TV.' : "Nothing's playing on Marquee right now." };
-  devices.command(profile, dev.clientId, { type, ...extra });
+  const requestId = devices.command(profile, dev.clientId, { type, ...extra, ...(voiceCallId ? { voiceCallId, targetConnectionId: dev.connectionId } : {}) });
   const words = { pause: 'Paused', resume: 'Playing', toggle: 'Okay', stop: 'Stopped', seekBy: extra.by > 0 ? `Skipped forward ${extra.by} seconds` : `Went back ${-extra.by} seconds`, next: 'Next episode' };
-  return { ok: true, speech: `${words[type] || 'Done'} on ${dev.name}`, action: { type: 'command', command: type, device: dev.name } };
+  return { ok: true, speech: `${words[type] || 'Done'} on ${dev.name}`, action: { requestId, type: 'command', command: type, device: dev.name } };
 }
 
 function whatsNew(profile) {
@@ -100,24 +100,39 @@ async function suggest(profile, mood) {
   return { ok: true, speech: `How about ${pick.title}${pick.year ? ` from ${pick.year}` : ''}${about}`, action: { type: 'suggest', itemId: pick.id, url: `marquee://item/${pick.id}` } };
 }
 
-async function handle(profile, raw, { device: preferredDevice = null } = {}) {
+async function handle(profile, raw, { device: preferredDevice = null, targetClientId = null, targetConnectionId = null, voiceCallId = null } = {}) {
+  let exact = null;
+  if (targetClientId !== null) {
+    if (typeof targetConnectionId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(targetConnectionId) || typeof targetClientId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(targetClientId) ||
+        typeof voiceCallId !== 'string' || !/^[A-Za-z0-9_:.-]{1,240}$/.test(voiceCallId))
+      return { ok: false, speech: 'Invalid tablet playback request.' };
+    try { exact = devices.resolve(profile, targetClientId, targetConnectionId); }
+    catch (e) { return { ok: false, speech: e.message }; }
+    // An admin app key must not bypass the watching profile's library or time limits.
+    const watching = db.prepare('SELECT * FROM profiles WHERE id = ?').get(exact.profileId);
+    if (!watching) return { ok: false, speech: 'Sign into Marquee on this tablet again.' };
+    profile = watching;
+  }
   let text = norm(raw).replace(/^(hey |ok |okay )?(ghost|jarvis|siri|google|marquee)\b,?\s*/, '').replace(/\s*(please|thanks|thank you)$/, '').replace(/\s+(in|on|using) marquee$/, '').trim();
   if (!text) return { ok: false, speech: 'Try: play Bluey on the lounge TV.' };
 
   // Remote control
   let m;
-  const { rest, device } = splitDevice(profile, text);
-  if (/^(pause|pause it|pause the (movie|show|tv|video))$/.test(rest)) return control(profile, 'pause', device);
-  if (/^(resume|unpause|keep playing|play)$/.test(rest)) return control(profile, 'resume', device);
-  if (/^(stop|stop it|stop playing|stop the (movie|show|tv|video))$/.test(rest)) return control(profile, 'stop', device);
-  if (/^(next|next episode|skip episode|play the next episode)$/.test(rest)) return control(profile, 'next', device);
+  const split = splitDevice(profile, text);
+  if (exact && split.device && split.device.clientId !== exact.clientId)
+    return { ok: false, speech: 'That names a different screen. Please choose here or name the other screen.' };
+  const rest = split.rest, device = exact || split.device;
+  if (/^(pause|pause it|pause the (movie|show|tv|video))$/.test(rest)) return control(profile, 'pause', device, {}, voiceCallId);
+  if (/^(resume|unpause|keep playing|play)$/.test(rest)) return control(profile, 'resume', device, {}, voiceCallId);
+  if (/^(stop|stop it|stop playing|stop the (movie|show|tv|video))$/.test(rest)) return control(profile, 'stop', device, {}, voiceCallId);
+  if (/^(next|next episode|skip episode|play the next episode)$/.test(rest)) return control(profile, 'next', device, {}, voiceCallId);
   if ((m = /^(skip|fast forward|go forward|jump ahead|skip ahead)( (\d+) (second|seconds|minute|minutes))?$/.exec(rest))) {
     const by = m[3] ? +m[3] * (/minute/.test(m[4]) ? 60 : 1) : 30;
-    return control(profile, 'seekBy', device, { by });
+    return control(profile, 'seekBy', device, { by }, voiceCallId);
   }
   if ((m = /^(go back|rewind|back)( (\d+) (second|seconds|minute|minutes))?$/.exec(rest))) {
     const by = m[3] ? +m[3] * (/minute/.test(m[4]) ? 60 : 1) : 10;
-    return control(profile, 'seekBy', device, { by: -by });
+    return control(profile, 'seekBy', device, { by: -by }, voiceCallId);
   }
 
   // Information
@@ -141,7 +156,7 @@ async function handle(profile, raw, { device: preferredDevice = null } = {}) {
     const row = db.prepare(`SELECT i.id, i.title, s.title AS show FROM progress pr JOIN items i ON i.id = pr.item_id LEFT JOIN items s ON s.id = i.parent_id
       WHERE pr.profile_id = ? AND pr.watched = 0 AND pr.position > 30 AND i.type IN ('movie','episode','home') ORDER BY pr.updated_at DESC LIMIT 1`).get(profile.id);
     if (!row) return { ok: false, speech: "You're not in the middle of anything." };
-    return play(profile, { id: row.id, label: row.show ? `${row.show}, ${row.title}` : row.title }, device, preferredDevice);
+    return play(profile, { id: row.id, label: row.show ? `${row.show}, ${row.title}` : row.title }, device, preferredDevice, voiceCallId);
   }
 
   // Play something
@@ -152,7 +167,7 @@ async function handle(profile, raw, { device: preferredDevice = null } = {}) {
       const show = findTitle(profile, ep[1]);
       const row = show && db.prepare("SELECT id, title FROM items WHERE parent_id = ? AND season = ? AND episode = ? AND type = 'episode'").get(show.id, +ep[2], +ep[3]);
       if (!row) return { ok: false, speech: `I couldn't find season ${ep[2]} episode ${ep[3]}${show ? ` of ${show.title}` : ''}.` };
-      return play(profile, { id: row.id, label: `${show.title}, season ${ep[2]} episode ${ep[3]}` }, device, preferredDevice);
+      return play(profile, { id: row.id, label: `${show.title}, season ${ep[2]} episode ${ep[3]}` }, device, preferredDevice, voiceCallId);
     }
     what = what.replace(/^(the )?next episode of /, '');
     if (/^something\b/.test(what)) return suggest(profile, what.replace(/^something\s*/, ''));
@@ -160,7 +175,7 @@ async function handle(profile, raw, { device: preferredDevice = null } = {}) {
     if (!row) return { ok: false, speech: `I couldn't find ${what} on Marquee.` };
     const target = playable(profile, row);
     if (!target) return { ok: false, speech: `${row.title} has no episodes yet.` };
-    return play(profile, target, device, preferredDevice);
+    return play(profile, target, device, preferredDevice, voiceCallId);
   }
 
   // Anything else: treat it as a search

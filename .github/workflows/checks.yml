@@ -1,0 +1,16 @@
+name: Ghost playback checks
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  playback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check server/features/assistant.js && node --check server/features/devices.js && node --check server/routes/ext.js && node --check public/js/boot.js
+      - run: node --test tests/ghost.test.js
