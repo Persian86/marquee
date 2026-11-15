@@ -13,8 +13,6 @@ const Downloads = (() => {
     const m = modal(`<h2>Download ${esc(item.show ? item.show.title + ' · ' + epCode(item) : item.title)}</h2>
       <p class="hint">${canKeepInApp() || window.MarqueeNative?.download ? 'It’ll be saved inside Marquee so you can watch without internet — on a plane, in the car, anywhere.' : 'Marquee will prepare a phone-friendly copy, then save it as a video file on this device.'}</p>
       <div class="menu-list">
-        <button data-q="720">${ICON.download}<span>Standard (720p) <small>Good on phones · about ${est(item, 3.2)}</small></span></button>
-        <button data-q="480">${ICON.download}<span>Data saver (480p) <small>Smallest · about ${est(item, 1.4)}</small></span></button>
         <button data-q="1080">${ICON.download}<span>High (1080p) <small>Best for tablets · about ${est(item, 6.2)}</small></span></button>
       </div>`);
     $$('[data-q]', m.el).forEach(b => b.onclick = async () => {
@@ -24,6 +22,7 @@ const Downloads = (() => {
     });
   }
   async function startWith(item, quality, smart = false) {
+    quality = PlaybackQuality.QUALITY;
     const v = await api('/api/versions', { body: { itemId: item.id, quality, reason: 'download' } });
     const j = jobs().filter(x => x.itemId !== item.id);
     j.push({ vid: v.id, itemId: item.id, quality, title: item.title, showTitle: item.show?.title || null, showId: item.show?.id || null, smart, code: item.show ? epCode(item) : '',
@@ -39,7 +38,7 @@ const Downloads = (() => {
     const curr = smartFor(show.id);
     const m = modal(`<h2>Auto-download ${esc(show.title)}</h2><p class="hint">Keeps the next unwatched episodes on this device, ready for when you're offline. Episodes you finish are removed to save space.</p>
       <div class="menu-list">${[0, 2, 3, 5].map(n => `<button data-n="${n}">${ICON.download}<span>${n ? `Keep the next ${n} episodes` : 'Off'}</span>${(curr?.count || 0) === n ? ICON.check : ''}</button>`).join('')}</div>
-      <div class="field" style="margin-top:12px"><label>Quality</label><select class="input" id="sq">${[['720', 'Standard (720p)'], ['480', 'Data saver (480p)'], ['1080', 'High (1080p)']].map(([k, l]) => `<option value="${k}" ${(curr?.quality || '720') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`);
+      <div class="field" style="margin-top:12px"><label>Quality</label><select class="input" id="sq">${[['1080', 'High (1080p)']].map(([k, l]) => `<option value="${k}" ${PlaybackQuality.QUALITY === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`);
     $$('[data-n]', m.el).forEach(b => b.onclick = () => {
       const all = smartAll();
       const n = +b.dataset.n;

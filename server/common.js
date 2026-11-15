@@ -1,5 +1,6 @@
 // Shared helpers used by all route files.
 const crypto = require('crypto');
+const PlaybackQuality = require('../public/js/playback-quality');
 const { db, refreshDups } = require('./db');
 
 const now = () => Date.now();
@@ -40,7 +41,7 @@ const img = name => (name ? `/img/${name}` : null);
 
 function publicProfile(p) {
   return {
-    maxQuality: p.max_quality || null, hidden: !!p.hidden, autoSubs: !!p.auto_subs, subLang: p.sub_lang || 'en', traktConnected: !!p.trakt,
+    maxQuality: PlaybackQuality.QUALITY, hidden: !!p.hidden, autoSubs: !!p.auto_subs, subLang: p.sub_lang || 'en', traktConnected: !!p.trakt,
     id: p.id, name: p.name, color: p.color, hasPin: !!p.pin_hash, isAdmin: !!p.is_admin, isKids: !!p.is_kids, maxLevel: p.max_level,
     limitWeekday: p.limit_weekday ?? null, limitWeekend: p.limit_weekend ?? null, bedtimeStart: p.bedtime_start || null, bedtimeEnd: p.bedtime_end || null,
     autoSkipIntro: !!p.auto_skip_intro, episodeLimit: p.episode_limit ?? null, letFinish: !!p.let_finish,
@@ -164,9 +165,8 @@ const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch
 const QUALITY_ORDER = ['original', '1080', '720', '480', '360'];
 // Never stream above a profile's cap (e.g. friends outside the house)
 function capQuality(profile, q) {
-  const cap = profile.max_quality;
-  if (!cap) return q;
-  return QUALITY_ORDER.indexOf(q) < QUALITY_ORDER.indexOf(cap) ? cap : q;
+  // The owner selected fixed 1080p across every device, replacing old bandwidth preferences.
+  return PlaybackQuality.QUALITY;
 }
 
 module.exports = {

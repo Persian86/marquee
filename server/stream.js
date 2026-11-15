@@ -1,5 +1,6 @@
 // Playback: direct play when the device can handle the file, otherwise HLS via ffmpeg.
 const fs = require('fs');
+const PlaybackQuality = require('../public/js/playback-quality');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
@@ -44,7 +45,7 @@ function decide(item, quality, caps, audioIndex, burnSub = null, readyVersion = 
     (vc === 'hevc' && caps.hevc) || (vc === 'vp9' && caps.vp9) || (vc === 'av1' && caps.av1);
   const audioOk = !ac || ['aac', 'mp3', 'opus', 'vorbis', 'flac'].includes(ac) || (ac === 'ac3' && caps.ac3) || (ac === 'eac3' && caps.eac3);
   const containerOk = /mp4|mov/.test(fmt) || (fmt.includes('webm') && ['vp8', 'vp9', 'av1'].includes(vc)) || (fmt.includes('matroska') && caps.mkv);
-  const withinQuality = quality === 'original' || (height <= q.height && (!bitrate || bitrate <= q.bitrate * 1.15));
+  const withinQuality = quality === 'original' || (height > 0 && height <= q.height && (!bitrate || bitrate <= q.bitrate * 1.15));
   const defaultAudio = audioIndex == null || audioIndex === 0 || (p.audio || []).length <= 1;
 
   if (burnSub == null && !noDirect) {
@@ -72,7 +73,7 @@ function buildArgs(item, opts, useHw) {
   const dir = opts.dir;
   const args = ['-hide_banner', '-v', 'error', '-nostdin'];
   const burn = opts.burnSub != null;
-  const hw = useHw && HWACCEL === 'vaapi' && !opts.copyVideo && !burn;
+  const hw = useHw && HWACCEL === 'vaapi' && !opts.copyVideo && !burn && p.height > 0 && p.width > 0;
   if (hw) args.push('-hwaccel', 'vaapi', '-hwaccel_device', VAAPI_DEVICE, '-hwaccel_output_format', 'vaapi');
   if (opts.start > 0) args.push('-ss', opts.start.toFixed(3));
   args.push('-i', item.path);
@@ -92,7 +93,7 @@ function buildArgs(item, opts, useHw) {
     } else {
       const filters = [];
       if (p.hdr && HAS_ZSCALE) filters.push('zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv');
-      if (scaled) filters.push(`scale=${w}:${h}`);
+      if (scaled || !p.height || !p.width) filters.push(PlaybackQuality.scaleFilter(item));
       filters.push('format=yuv420p');
       if (burn) {
         // Picture-based subtitles (Blu-ray/DVD) are drawn onto the video, scaled to fit
@@ -288,4 +289,4 @@ function audioTracks(item) {
   }));
 }
 
-module.exports = { QUALITIES, decide, startSession, stopSession, sessions, servePlaylist, serveSegment, sessionInfo, listSubtitles, serveSubtitle, audioTracks, hwStatus, HAS_ZSCALE };
+module.exports = { sourceHeight: PlaybackQuality.sourceHeight, QUALITIES, decide, startSession, stopSession, sessions, servePlaylist, serveSegment, sessionInfo, listSubtitles, serveSubtitle, audioTracks, hwStatus, HAS_ZSCALE };

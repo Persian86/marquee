@@ -49,7 +49,7 @@ r.get('/overview', (req, res) => {
     levels: tmdb.LEVEL_NAMES,
     settings: {
       webhookUrl: getSetting('webhook_url', ''), lanUrl: getSetting('lan_url', ''), remoteUrl: getSetting('remote_url', ''), holidayMode: getSetting('holiday_mode', 'auto'), autoOptimize: getSetting('auto_optimize', '0') === '1',
-      autoOptimizeQuality: getSetting('auto_optimize_quality', '720'), optimizeMaxGb: +getSetting('optimize_max_gb', '50'),
+      autoOptimizeQuality: '1080', optimizeMaxGb: +getSetting('optimize_max_gb', '50'),
       osApiKeySet: !!getSetting('os_api_key'), osUsername: getSetting('os_username', ''), osLanguages: getSetting('os_languages', 'en'),
       radarrUrl: getSetting('radarr_url', ''), radarrKeySet: !!getSetting('radarr_key'), radarrRoot: getSetting('radarr_root', ''), radarrProfile: getSetting('radarr_profile', ''),
       sonarrUrl: getSetting('sonarr_url', ''), sonarrKeySet: !!getSetting('sonarr_key'), sonarrRoot: getSetting('sonarr_root', ''), sonarrProfile: getSetting('sonarr_profile', ''),
@@ -155,7 +155,7 @@ r.put('/settings', wrap(async (req, res) => {
     if (/Url$/.test(k) && v && !/^https?:\/\//.test(v)) return res.status(400).json({ error: 'Addresses must start with http:// or https://' });
     setSetting(key, v);
   }
-  if (b.autoOptimizeQuality && versions.PRESETS[b.autoOptimizeQuality]) setSetting('auto_optimize_quality', b.autoOptimizeQuality);
+  if (b.autoOptimizeQuality && versions.PRESETS[b.autoOptimizeQuality]) setSetting('auto_optimize_quality', '1080');
   if (b.optimizeMaxGb != null) setSetting('optimize_max_gb', String(Math.max(1, Math.min(10000, +b.optimizeMaxGb || 50))));
   if (b.tmdbApiKey != null) {
     const old = getSetting('tmdb_api_key');

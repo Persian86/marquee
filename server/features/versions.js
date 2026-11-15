@@ -1,6 +1,7 @@
 // Pre-converted copies ("optimized versions"): phone-friendly MP4s made in the background.
 // Used for instant playback, offline downloads, and casting.
 const fs = require('fs');
+const PlaybackQuality = require('../../public/js/playback-quality');
 const path = require('path');
 const { spawn } = require('child_process');
 const { db, getSetting } = require('../db');
@@ -19,6 +20,7 @@ let current = null; // { id, proc }
 function itemProbe(item) { try { return JSON.parse(item.probe || '{}') || {}; } catch { return {}; } }
 
 function request(itemId, quality, reason = 'manual') {
+  quality = PlaybackQuality.QUALITY;
   if (!PRESETS[quality]) throw new Error('Unknown quality');
   const item = db.prepare("SELECT id, type FROM items WHERE id = ? AND type IN ('movie','episode','home')").get(itemId);
   if (!item) throw new Error('Not a video');
@@ -60,6 +62,8 @@ function kick() {
 }
 
 function run(v, useHw) {
+  const metadata = itemProbe(v);
+  useHw = useHw && metadata.height > 0 && metadata.width > 0;
   const q = PRESETS[v.quality];
   const p = itemProbe(v);
   const srcH = p.height || 1080, srcW = p.width || 1920;
@@ -71,7 +75,7 @@ function run(v, useHw) {
   if (useHw) args.push('-hwaccel', 'vaapi', '-hwaccel_device', VAAPI_DEVICE, '-hwaccel_output_format', 'vaapi');
   args.push('-i', v.src, '-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn', '-map_chapters', '-1');
   if (useHw) args.push('-vf', `${p.hdr ? 'tonemap_vaapi=format=nv12:t=bt709:m=bt709:p=bt709,' : ''}scale_vaapi=w=${w}:h=${Math.round(h / 2) * 2}:format=nv12`, '-c:v', 'h264_vaapi', '-b:v', String(q.bitrate), '-maxrate', String(q.bitrate * 1.5), '-bufsize', String(q.bitrate * 3));
-  else args.push('-vf', `scale=${w}:${Math.round(h / 2) * 2},format=yuv420p`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-maxrate', String(q.bitrate * 1.5), '-bufsize', String(q.bitrate * 3), '-profile:v', 'high', '-level:v', '4.1');
+  else args.push('-vf', `${PlaybackQuality.scaleFilter(v, q.height)},format=yuv420p`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-maxrate', String(q.bitrate * 1.5), '-bufsize', String(q.bitrate * 3), '-profile:v', 'high', '-level:v', '4.1');
   args.push('-c:a', 'aac', '-ac', '2', '-b:a', '160k', '-movflags', '+faststart', '-f', 'mp4', '-progress', 'pipe:1', part);
 
   db.prepare("UPDATE versions SET status = 'working', progress = 0, error = NULL WHERE id = ?").run(v.id);
@@ -106,9 +110,9 @@ function run(v, useHw) {
 }
 
 // Best ready copy for a quality limit (used to play instantly instead of live-converting)
-function bestReady(itemId, maxHeight) {
+function bestReady(itemId, maxHeight, minHeight = 0) {
   const rows = db.prepare("SELECT * FROM versions WHERE item_id = ? AND status = 'ready'").all(itemId);
-  const ok = rows.filter(r => PRESETS[r.quality].height <= maxHeight && fs.existsSync(r.path))
+  const ok = rows.filter(r => PRESETS[r.quality] && PRESETS[r.quality].height <= maxHeight && PRESETS[r.quality].height >= minHeight && fs.existsSync(r.path))
     .sort((a, b) => PRESETS[b.quality].height - PRESETS[a.quality].height);
   if (ok[0]) db.prepare('UPDATE versions SET used_at = ? WHERE id = ?').run(Date.now(), ok[0].id);
   return ok[0] || null;
@@ -119,7 +123,7 @@ function autoQueueNext(profileId, episodeId) {
   if (getSetting('auto_optimize', '0') !== '1') return;
   const ep = db.prepare("SELECT id, parent_id FROM items WHERE id = ? AND type = 'episode'").get(episodeId);
   if (!ep) return;
-  const quality = getSetting('auto_optimize_quality', '720');
+  const quality = PlaybackQuality.QUALITY;
   const eps = db.prepare(`SELECT i.id FROM items i LEFT JOIN progress p ON p.item_id = i.id AND p.profile_id = ?
     WHERE i.parent_id = ? AND COALESCE(p.watched, 0) = 0 ORDER BY (i.season = 0), i.season, i.episode`).all(profileId, ep.parent_id).map(r => r.id);
   const idx = eps.indexOf(episodeId);

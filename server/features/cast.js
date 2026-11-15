@@ -1,5 +1,6 @@
 // Chromecast support. The TV can't log in, so it gets short-lived signed links on your home network address.
 const crypto = require('crypto');
+const PlaybackQuality = require('../../public/js/playback-quality');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -29,11 +30,12 @@ function castable(item, quality) {
   const p = itemProbe(item);
   const ac = p.audio?.[0]?.codec;
   return /mp4|mov/.test(p.format_name || '') && p.video_codec === 'h264' && (p.pix_fmt || 'yuv420p') === 'yuv420p' && ['aac', 'mp3'].includes(ac || 'aac')
-    && (quality === 'original' || (p.height || 0) <= (+quality || 1080)) && !p.hdr;
+    && (quality === 'original' || (p.height > 0 && p.height <= (+quality || 1080))) && !p.hdr;
 }
 
 function prepare(item, { quality = '1080', start = 0, audioIndex = 0, subKey = null, base }) {
-  const ready = !castable(item, quality) && versions.bestReady(item.id, +quality || 1080);
+  quality = PlaybackQuality.QUALITY;
+  const ready = !castable(item, quality) && versions.bestReady(item.id, 1080, PlaybackQuality.requiredHeight(item));
   const direct = castable(item, quality) || !!ready;
   const token = sign({ i: item.id, q: quality, s: direct ? 0 : start, a: audioIndex, v: ready ? ready.id : null, sub: subKey });
   const out = {
@@ -56,14 +58,10 @@ function serveMedia(req, res) {
   }
   if (castable(item, t.q)) return res.sendFile(item.path, { dotfiles: 'allow', acceptRanges: true });
   // Live conversion into a streamable MP4
-  const p = itemProbe(item);
-  const maxH = +t.q || 1080;
-  const h = Math.min(p.height || 1080, maxH);
-  const w = Math.round(((p.width || 1920) * h / (p.height || 1080)) / 2) * 2;
   const args = ['-v', 'error', '-nostdin'];
   if (t.s > 0) args.push('-ss', String(t.s));
   args.push('-i', item.path, '-map', '0:v:0', '-map', `0:a:${t.a || 0}?`, '-sn',
-    '-vf', `scale=${w}:${Math.round(h / 2) * 2},format=yuv420p`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-maxrate', '10M', '-bufsize', '20M',
+    '-vf', `${PlaybackQuality.scaleFilter(item)},format=yuv420p`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-maxrate', '10M', '-bufsize', '20M',
     '-c:a', 'aac', '-ac', '2', '-b:a', '192k', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1');
   res.set('Content-Type', 'video/mp4');
   const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore'] });
