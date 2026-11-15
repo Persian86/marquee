@@ -1,0 +1,28 @@
+const fs = require('fs');
+const vm = require('vm');
+const assert = require('assert/strict');
+const {EventEmitter} = require('events');
+const file = require('path').join(__dirname, 'stream.js');
+const actualRequire = require('module').createRequire(file);
+const children = [];
+const moduleMock = {exports:{}};
+const context = {module:moduleMock, exports:moduleMock.exports, console:{error(){},warn(){}},setInterval:()=>({unref(){}}),setTimeout:()=>0,require(name){
+  if(name==='fs')return{mkdirSync(){},readdirSync:()=>[],existsSync:()=>false,rm(){},rmSync(){}};
+  if(name==='./config')return{TRANSCODE_DIR:'test',HWACCEL:'none',VAAPI_DEVICE:'',MAX_TRANSCODES:2};
+  if(name==='child_process')return{execFileSync:()=>'',spawn(){const p=new EventEmitter();p.stderr=new EventEmitter();p.kill=s=>{p.signal=s;};children.push(p);return p;}};
+  return actualRequire(name);
+}};
+vm.createContext(context);vm.runInContext(fs.readFileSync(file,'utf8'),context);
+const stream=moduleMock.exports;
+const item={path:'video.mkv',probe:JSON.stringify({video_codec:'hevc',format_name:'matroska',height:1080,width:1920,audio:[{codec:'aac'}]})};
+const opts=deviceId=>({deviceId,profileId:1,quality:'1080',start:0});
+const a=stream.startSession(item,opts('TV')),b=stream.startSession(item,opts('phone'));
+assert.throws(()=>stream.startSession(item,opts('tablet')),e=>e.status===503);
+assert(stream.sessions.has(a.id)&&stream.sessions.has(b.id));assert(!children[0].signal);
+const c=stream.startSession(item,opts('TV'));assert(!stream.sessions.has(a.id)&&stream.sessions.has(b.id));
+children[2].emit('error',Object.assign(new Error('missing'),{code:'ENOENT'}));assert.match(c.error,/Install ffmpeg/);
+const caps={hevc:true,mkv:true};assert.equal(stream.decide(item,'1080',caps,0).mode,'direct');
+const hdr={...item,probe:JSON.stringify({...JSON.parse(item.probe),hdr:true,color_transfer:'smpte2084'})};
+assert.equal(stream.decide(hdr,'1080',caps,0).mode,'hls');assert.equal(stream.decide(hdr,'1080',{...caps,hdr10:true},0).mode,'direct');
+assert.equal(stream.decide(hdr,'1080',{...caps,hlg:true},0).mode,'hls');
+console.log('PASS: stream capacity, replacement, startup errors and HDR matching.');
