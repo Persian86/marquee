@@ -1,7 +1,7 @@
 // Marquee service worker: instant app start, offline downloads, push notifications.
-const SHELL_CACHE = 'marquee-shell-v13';
+const SHELL_CACHE = 'marquee-shell-v14-1080';
 const DL_CACHE = 'marquee-downloads';
-const SHELL = ['/', '/index.html', '/styles.css', '/js/core.js', '/js/media.js', '/js/downloads.js', '/js/pages.js', '/js/player.js', '/js/admin.js', '/js/extras.js', '/js/boot.js',
+const SHELL = ['/', '/index.html', '/styles.css', '/js/playback-quality.js', '/js/ghost.js', '/js/core.js', '/js/media.js', '/js/downloads.js', '/js/pages.js', '/js/player.js', '/js/admin.js', '/js/extras.js', '/js/boot.js',
   '/vendor/hls.min.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(SHELL_CACHE).then(c => c.addAll(SHELL)).catch(() => {})); self.skipWaiting(); });

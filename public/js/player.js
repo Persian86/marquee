@@ -1,37 +1,7 @@
 /* Marquee — video player: adaptive quality, intro skip, watch parties, Chromecast, AirPlay, offline */
 'use strict';
 
-const QUALITY_ORDER = ['original', '1080', '720', '480', '360'];
-const QUALITY_BITRATE = { original: 25e6, '1080': 8e6, '720': 4e6, '480': 1.5e6, '360': 0.7e6 };
-function qualityPref() { return store.get('mq_quality', 'auto'); }
-
-// Quick connection check, cached for 10 minutes
-async function measureSpeed() {
-  const cached = store.get('mq_speed');
-  if (cached && Date.now() - cached.at < 600000) return cached.mbps;
-  const t0 = performance.now();
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 6000);
-  let bytes = 0;
-  try {
-    const res = await fetch('/api/speedtest?kb=1536', { signal: ctl.signal, cache: 'no-store' });
-    const reader = res.body.getReader();
-    for (;;) { const { done, value } = await reader.read(); if (done) break; bytes += value.length; }
-  } catch {}
-  clearTimeout(timer);
-  const secs = Math.max(0.05, (performance.now() - t0) / 1000);
-  const mbps = (bytes * 8 / secs) / 1e6;
-  store.set('mq_speed', { mbps, at: Date.now() });
-  return mbps;
-}
-async function autoQuality() {
-  const c = navigator.connection;
-  const cellular = c && (c.type === 'cellular' || c.saveData);
-  const mbps = await measureSpeed();
-  let q = mbps > 30 ? 'original' : mbps > 14 ? '1080' : mbps > 7 ? '720' : mbps > 3 ? '480' : '360';
-  if (cellular && QUALITY_ORDER.indexOf(q) < 2) q = '720';
-  return q;
-}
+function qualityPref() { return PlaybackQuality.QUALITY; }
 
 function deviceCaps() {
   const v = document.createElement('video');
@@ -103,7 +73,7 @@ ROUTES.play = async id => {
   </div>`;
   const root = $('#pl'), video = $('#v'), ui = $('#ui');
   const S = {
-    info: null, item: null, offset: 0, mode: null, hls: null, auto: qualityPref() === 'auto', quality: qualityPref() === 'auto' ? null : qualityPref(),
+    info: null, item: null, offset: 0, mode: null, hls: null, auto: false, quality: PlaybackQuality.QUALITY,
     audioIndex: 0, subKey: store.get('mq_subs_on', null), burnKey: null, subCache: {}, track: null, loadingSeq: 0, loading: false,
     lastSaved: 0, closed: false, upnextShown: false, menu: null, dragging: false, introSkipped: false, warned: false,
     stalls: [], stallStart: 0, loadedAt: 0, lastUpCheck: 0, cast: null, room: null, remoteAt: 0, clockOffset: 0, members: [],
@@ -189,7 +159,7 @@ ROUTES.play = async id => {
       await new Promise(r => video.addEventListener('loadedmetadata', r, { once: true }));
       if (start > 0) video.currentTime = start;
     } else {
-      if (S.auto && !S.quality) S.quality = await autoQuality();
+      S.auto = false; S.quality = PlaybackQuality.QUALITY;
       let info;
       try {
         info = await api(`/api/play/${id}`, { body: { quality: S.quality, caps: deviceCaps(), audioIndex: S.audioIndex, start, deviceId, subKey: S.burnKey, forceStream: !!S.forceHls, forceTranscode: !!S.forceTranscode, night: S.night && nightOnServer() } });
@@ -200,8 +170,8 @@ ROUTES.play = async id => {
       if (seq !== S.loadingSeq || S.closed) return;
       S.info = info; S.mode = info.mode; S.offset = info.mode === 'direct' ? 0 : info.start;
       const badge = $('#pbadge');
-      badge.classList.toggle('hidden', info.mode === 'direct' && S.quality === 'original');
-      badge.textContent = info.prepared ? `Ready copy · ${info.prepared}p` : info.mode === 'direct' ? (info.hdr ? 'Direct · HDR' : 'Direct') : info.transcoding ? `${S.auto ? 'Auto · ' : ''}${S.quality === 'original' ? 'Converting' : S.quality + 'p'}${info.hw ? ' · GPU' : ''}${info.hdr ? ' · HDR' : ''}` : 'Direct stream';
+      badge.classList.remove('hidden');
+      badge.textContent = PlaybackQuality.label(info);
       const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       const native = !!video.canPlayType('application/vnd.apple.mpegurl') && (isIOS || !(window.Hls && Hls.isSupported()));
       if (info.mode === 'direct') {
@@ -244,59 +214,23 @@ ROUTES.play = async id => {
     if (S.closed) return;
     const again = note => { if (note) toast(note, 3500); return load(cur(), true).catch(() => showError('This device couldn’t play the file.')); };
     if (offlineMode) return showError('This download couldn’t be played.');
-    if (S.mode === 'direct' && !S.forceHls) { S.forceHls = true; return again(); }
-    if (!S.forceTranscode) {
-      S.forceTranscode = true;
-      if (!S.quality || S.quality === 'original') S.quality = '1080';
-      return again('Converting this one for your device…');
-    }
-    if (!S.steppedDown) {
-      S.steppedDown = true; S.auto = false;
-      S.quality = S.quality === '480' || S.quality === '360' ? '360' : S.quality === '720' ? '480' : '720';
-      return again('Trying a lower quality…');
+    const next = PlaybackQuality.recovery(S);
+    if (next) {
+      Object.assign(S, next); S.auto = false; S.quality = PlaybackQuality.QUALITY;
+      return again(next.forceTranscode ? 'Converting at 1080p for this device…' : null);
     }
     console.warn('Playback failed:', detail);
-    showError('This device couldn’t play this video, even after converting it. Try again, or try another device.');
+    showError('This device couldn’t play this video, even after converting it. 1080p is fixed, so it will not switch to a lower quality. Check the connection or try again.');
   }
 
   function showError(msg) {
     busy(false);
     const el = $('#pst');
     el.innerHTML = `<div class="p-error"><h2>Can't play this</h2><p>${esc(msg)}</p><div class="btn-row" style="justify-content:center">
-      <button class="btn primary" id="perrRetry">Try again</button>${offlineMode ? '' : '<button class="btn" id="perrLow">Try lower quality</button>'}</div></div>`;
+      <button class="btn primary" id="perrRetry">Try again</button></div></div>`;
     el.style.pointerEvents = 'auto';
     $('#perrRetry').onclick = () => { el.style.pointerEvents = ''; load(cur()); };
-    if ($('#perrLow')) $('#perrLow').onclick = () => { el.style.pointerEvents = ''; S.auto = false; S.quality = '480'; load(cur()); };
   }
-
-  // ---------- adaptive quality ----------
-  function onStall() {
-    if (!S.auto || S.loading || S.mode === 'direct' && S.quality === 'original' && false) return;
-    if (Date.now() - S.loadedAt < 8000 || S.seeking) return;
-    S.stallStart = Date.now();
-    S.stalls.push(Date.now());
-    S.stalls = S.stalls.filter(t => Date.now() - t < 60000);
-    if (S.stalls.length >= 2) stepDown();
-  }
-  function onResume() {
-    if (S.stallStart && Date.now() - S.stallStart > 5000 && Date.now() - S.loadedAt > 8000) stepDown();
-    S.stallStart = 0;
-  }
-  function stepDown() {
-    const i = QUALITY_ORDER.indexOf(S.quality);
-    if (i < 0 || i >= QUALITY_ORDER.length - 1 || offlineMode || remote()) return;
-    S.quality = QUALITY_ORDER[i + 1];
-    store.set('mq_speed', null);
-    toast(`Connection is slow — switching to ${S.quality}p`, 3000);
-    load(cur(), true);
-  }
-  setInterval(() => { // step back up when the connection improves (hls.js measures bandwidth for us)
-    if (!S.auto || !S.hls || paused() || Date.now() - S.loadedAt < 90000 || S.stalls.length) return;
-    const i = QUALITY_ORDER.indexOf(S.quality);
-    if (i <= 0) return;
-    const up = QUALITY_ORDER[i - 1];
-    if ((S.hls.bandwidthEstimate || 0) > QUALITY_BITRATE[up] * 2.5) { S.quality = up; toast(`Connection improved — switching to ${up === 'original' ? 'original quality' : up + 'p'}`, 3000); load(cur(), true); }
-  }, 30000);
 
   // ---------- subtitles (cues shifted to match where the stream started) ----------
   function parseVTT(text) {
@@ -388,8 +322,8 @@ ROUTES.play = async id => {
   video.addEventListener('progress', () => paint());
   video.addEventListener('play', () => { paint(); bump(); if (!S.loading) party('play'); window.MarqueeNative?.playing(true); });
   video.addEventListener('pause', () => { window.MarqueeNative?.playing(false); paint(); if (!S.closed && !S.loading) { beat(true); party('pause'); } showUI(true); });
-  video.addEventListener('waiting', () => { busy(true); onStall(); });
-  video.addEventListener('playing', () => { busy(false); onResume(); });
+  video.addEventListener('waiting', () => { busy(true); });
+  video.addEventListener('playing', () => { busy(false); });
   video.addEventListener('canplay', () => busy(false));
   video.addEventListener('ended', () => {
     beat(true);
@@ -502,10 +436,8 @@ ROUTES.play = async id => {
     const i = S.info; if (!i) return;
     const m = document.createElement('div');
     m.className = 'p-menu';
-    const qs = [...(i.qualities || [])].reverse();
     m.innerHTML = offlineMode ? `<h4>Downloaded</h4><p class="pm-note">Playing your offline copy.</p>` : `
-      <h4>Quality</h4><button data-q="auto" class="${S.auto ? 'on' : ''}">Auto${S.auto && S.quality ? ` <small>(${S.quality === 'original' ? 'original' : S.quality + 'p'})</small>` : ''}</button>
-      ${qs.filter(q => !i.maxQuality || QUALITY_ORDER.indexOf(q.key) >= QUALITY_ORDER.indexOf(i.maxQuality)).map(q => `<button data-q="${q.key}" class="${!S.auto && q.key === S.quality ? 'on' : ''}">${esc(q.label)}</button>`).join('')}
+      <h4>Quality</h4><p class="pm-note">1080p fixed on every device. Lower-resolution sources keep their original resolution.</p>
       ${i.audioTracks.length > 1 ? `<h4>Audio</h4>${i.audioTracks.map(a => `<button data-a="${a.index}" class="${a.index === S.audioIndex ? 'on' : ''}">${esc(a.label)}</button>`).join('')}` : ''}
       <h4>Subtitles</h4><button data-s="" class="${!S.subKey && !S.burnKey ? 'on' : ''}">Off</button>
       ${i.subtitles.map(s => `<button data-s="${s.key}" class="${s.key === S.subKey || s.key === S.burnKey ? 'on' : ''}">${esc(s.label)}</button>`).join('')}
@@ -524,16 +456,9 @@ ROUTES.play = async id => {
       ${(i.chapters || []).length ? `<h4>Chapters</h4>${i.chapters.map(c => `<button data-ch="${c.start}">${esc(c.title || fmtTime(c.start))}</button>`).join('')}` : ''}
       <h4>More</h4><button data-p="send">${ICON.cast} Play on another device…</button>
       ${!me?.isKids ? `<button data-p="autoskip" class="${me?.autoSkipIntro ? 'on' : ''}">Skip intros & recaps automatically</button>` : ''}
-      ${i.maxQuality ? `<p class="pm-note">This profile is limited to ${i.maxQuality}p.</p>` : ''}
       <p class="pm-note">${i.prepared ? 'Playing a prepared copy — no converting needed' : i.mode === 'direct' ? 'Playing the original file' : i.transcoding ? `Converting on the fly (${esc(i.reason)})` : 'Repackaging without re-encoding'}</p>`;
     m.addEventListener('click', e => e.stopPropagation());
     ui.appendChild(m); S.menu = m; showUI(true);
-    $$('[data-q]', m).forEach(b => b.onclick = () => {
-      closeMenu();
-      if (b.dataset.q === 'auto') { S.auto = true; S.quality = null; store.set('mq_quality', 'auto'); }
-      else { S.auto = false; S.quality = b.dataset.q; store.set('mq_quality', b.dataset.q); }
-      if (remote()) (window.__nativeCast ? nativeLoad : castLoad)(cur()); else load(cur(), !paused());
-    });
     $$('[data-a]', m).forEach(b => b.onclick = () => { S.audioIndex = +b.dataset.a; closeMenu(); remote() ? (window.__nativeCast ? nativeLoad : castLoad)(cur()) : load(cur(), !paused()); });
     $$('[data-s]', m).forEach(b => b.onclick = () => {
       closeMenu();

@@ -41,8 +41,8 @@ ROUTES.settings = async () => {
         <div class="list-item" style="padding-top:0">${avatar(me, 44, 12)}
           <div class="grow"><div class="t">${esc(me.name)}${me.isAdmin ? '<span class="pill accent">Admin</span>' : ''}${me.isKids ? '<span class="pill">Kids</span>' : ''}</div><div class="s">${LEVELS[me.maxLevel]}</div></div>
           <button class="btn small" id="switch">Switch profile</button></div>
-        <div class="list-item"><div class="grow"><div class="t">Streaming quality on this device</div><div class="s">Auto tests your connection and adjusts if things start buffering</div></div>
-          <select class="select" id="qpref">${[['auto', 'Auto'], ['original', 'Original'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']].map(([k, l]) => `<option value="${k}" ${qp === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="list-item"><div class="grow"><div class="t">Streaming quality on every device</div><div class="s">Fixed at 1080p. Playback will buffer or show an error rather than reduce quality.</div></div>
+          <select class="select" id="qpref" disabled>${[['1080', '1080p · fixed']].map(([k, l]) => `<option value="${k}" ${qp === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="list-item"><div class="grow"><div class="t">Cinema mode</div><div class="s">A couple of trailers from your library before a movie, like at the pictures</div></div>
           <label class="switch"><input type="checkbox" id="cinema" ${me.cinemaMode ? 'checked' : ''}><span></span></label></div>
         <div class="list-item"><div class="grow"><div class="t">Theme songs</div><div class="s">Play a show's theme quietly when you open it</div></div>
@@ -199,7 +199,7 @@ function adminPanels(o) {
       <p class="hint">Marquee can convert things ahead of time into phone-friendly copies, so they start instantly and use less of the box's power while you watch. Downloads use these too.</p>
       <div class="list-item"><div class="grow"><div class="t">Prepare the next episodes automatically</div><div class="s">For shows people are watching, the next 2 episodes are made ready overnight-style in the background</div></div>
         <label class="switch"><input type="checkbox" id="autoOpt" ${set.autoOptimize ? 'checked' : ''}><span></span></label></div>
-      <div class="list-item"><div class="grow"><div class="t">Quality</div></div><select class="select" id="optQ">${['1080', '720', '480'].map(q => `<option ${set.autoOptimizeQuality === q ? 'selected' : ''} value="${q}">${q}p</option>`).join('')}</select></div>
+      <div class="list-item"><div class="grow"><div class="t">Quality</div></div><select class="select" id="optQ">${['1080'].map(q => `<option ${set.autoOptimizeQuality === q ? 'selected' : ''} value="${q}">${q}p</option>`).join('')}</select></div>
       <div class="list-item"><div class="grow"><div class="t">Space to use</div><div class="s">Oldest copies are removed first. Currently ${fmtBytes(o.versions.bytes)}.</div></div>
         <select class="select" id="optGb">${[10, 25, 50, 100, 250, 500].map(g => `<option ${set.optimizeMaxGb === g ? 'selected' : ''} value="${g}">${g} GB</option>`).join('')}</select></div>
       <h3 class="sub-h">Copies</h3><div class="list" id="versionList">${loading()}</div>
@@ -423,7 +423,7 @@ function profileModal(p, redraw, o) {
     <div class="list-item" style="border:0;padding:0 0 14px"><div class="grow"><div class="t">Let them finish the episode</div><div class="s">When time runs out mid-episode, it plays to the end and then says goodbye — instead of stopping mid-scene</div></div><label class="switch"><input type="checkbox" id="plf" ${p?.letFinish ? 'checked' : ''}><span></span></label></div>
     <div class="field"><label>PIN ${p?.hasPin ? '(leave blank to keep the current one)' : '(optional, 4–8 digits)'}</label><input class="input" id="pp" inputmode="numeric" type="password" autocomplete="new-password" placeholder="${p?.hasPin ? '••••' : 'No PIN'}"></div>
     ${p?.hasPin && !p.isAdmin ? `<label style="display:flex;gap:8px;align-items:center;margin:-4px 0 14px;color:var(--muted);font-size:13.5px"><input type="checkbox" id="pr"> Remove PIN</label>` : ''}
-    <div class="field"><label>Highest streaming quality</label><select class="input" id="pq">${[['', 'No limit'], ['1080', '1080p'], ['720', '720p'], ['480', '480p — good for friends far away'], ['360', '360p']].map(([k, l]) => `<option value="${k}" ${(p?.maxQuality || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div class="field"><label>Streaming quality</label><select class="input" id="pq" disabled>${[['1080', '1080p · fixed on all devices']].map(([k, l]) => `<option value="${k}" ${(p?.maxQuality || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="field"><label>Libraries this profile can open</label>
       <p class="hint">Untick a library and it disappears for this profile, including search. A kids profile should only have Zoey Movies and Zoey TV ticked. Mark those libraries “Safe for kids” when you add them.</p>
       <div class="lib-checks">${o.libraries.map(l => `<label><input type="checkbox" value="${l.id}" data-safe="${l.kids_safe ? 1 : 0}" ${!p || !p.libraries?.length || p.libraries.includes(l.id) ? 'checked' : ''}> ${esc(l.name)}${l.kids_safe ? ' · kids' : ''}</label>`).join('')}</div></div>

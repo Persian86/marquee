@@ -13,4 +13,10 @@ jobs:
         with:
           node-version: '22'
       - run: node --check server/features/assistant.js && node --check server/features/devices.js && node --check server/routes/ext.js && node --check public/js/boot.js
-      - run: node --test tests/ghost.test.js
+      - name: Check playback JavaScript
+        run: |
+          for file in public/js/playback-quality.js public/js/player.js public/js/admin.js public/js/downloads.js public/sw.js server/common.js server/stream.js server/routes/core.js server/routes/admin.js server/features/cast.js server/features/versions.js; do node --check "$file"; done
+      - name: Install video conversion test dependency
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Test voice playback and fixed resolution
+        run: node --test tests/ghost.test.js tests/quality.test.js

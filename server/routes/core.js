@@ -409,7 +409,7 @@ r.post('/play/:id', (req, res) => {
   if (!allowed.ok) return res.status(403).json({ error: allowed.message, code: allowed.reason });
   if (!fs.existsSync(row.path)) return res.status(410).json({ error: 'File is missing from disk — try a library scan' });
   const { caps = {}, audioIndex = 0, start = 0, deviceId = 'unknown', subKey = null, forceStream = false, night = false, forceTranscode = false } = req.body || {};
-  const quality = C.capQuality(p, req.body?.quality || 'original');
+  const quality = C.capQuality(p, req.body?.quality || '1080');
   if (p.auto_subs && !row.subs_checked && subtitles.configured()) {
     const lang = p.sub_lang || 'en';
     const has = stream.listSubtitles(row).some(s => (s.lang || '').toLowerCase().startsWith(lang.slice(0, 2)));
@@ -418,7 +418,8 @@ r.post('/play/:id', (req, res) => {
   const subs = stream.listSubtitles(row);
   const burn = subs.find(s => s.key === subKey && s.burn);
   const q = stream.QUALITIES[quality] || stream.QUALITIES.original;
-  const ready = versions.bestReady(row.id, q.height);
+  const sourceHeight = stream.sourceHeight(row);
+  const ready = versions.bestReady(row.id, q.height, Math.min(sourceHeight || 1080, 1080));
   const decision = stream.decide(row, quality, caps, audioIndex | 0, burn ? +burn.key.slice(4) : null, night ? null : ready, !!forceStream || !!night || !!forceTranscode);
   // The device said it couldn't play the file as it is (e.g. 10-bit or very high-bitrate video), so fully convert it
   if (forceTranscode && decision.mode === 'hls') { decision.copyVideo = false; decision.copyAudio = false; decision.reason = 'device'; }
@@ -426,7 +427,7 @@ r.post('/play/:id', (req, res) => {
     itemId: row.id, duration: row.duration, title: row.title, showTitle: row.show_title, season: row.season, episode: row.episode,
     subtitles: subs.map(({ key, label, lang, burn: b }) => ({ key, label, lang, burn: !!b, url: b ? null : `/api/subs/${row.id}/${key}` })),
     audioTracks: stream.audioTracks(row), qualities: Object.entries(stream.QUALITIES).map(([k, v]) => ({ key: k, label: v.label })),
-    quality, audioIndex: audioIndex | 0, resume: row.watched ? 0 : (row.position || 0), remaining: allowed.remaining ?? null, episodesLeft: allowed.episodesLeft ?? null, maxQuality: p.max_quality || null, night: !!night,
+    quality, sourceHeight, qualityPolicy: "fixed-1080", audioIndex: audioIndex | 0, resume: row.watched ? 0 : (row.position || 0), remaining: allowed.remaining ?? null, episodesLeft: allowed.episodesLeft ?? null, maxQuality: quality, night: !!night,
     chapters: chaptersOf(row),
     hdr: hdrOf(row),
     intro: row.intro_end ? { start: row.intro_start || 0, end: row.intro_end } : null,
@@ -547,7 +548,8 @@ r.post('/cast/:id', (req, res) => {
   if (!allowed.ok) return res.status(403).json({ error: allowed.message, code: allowed.reason });
   const base = castBase(req);
   if (!base) return res.status(400).json({ error: "Casting needs your server's home network address. Ask the admin to set it in Settings → Server addresses." });
-  const { quality = '1080', start = 0, audioIndex = 0, subKey = null } = req.body || {};
+  const { start = 0, audioIndex = 0, subKey = null } = req.body || {};
+  const quality = C.capQuality(req.profile, req.body?.quality);
   res.json({ ...cast.prepare(row, { quality, start: +start || 0, audioIndex: audioIndex | 0, subKey, base }), title: row.title, showTitle: row.show_title });
 });
 
