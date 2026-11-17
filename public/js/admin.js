@@ -303,7 +303,7 @@ function adminPanels(o) {
 
     <div class="panel">
       <h2>Requests (Radarr & Sonarr)</h2>
-      <p class="hint">Let the family ask for movies and shows. Approved requests go to <a href="https://radarr.video" target="_blank" rel="noopener">Radarr</a> (movies) and <a href="https://sonarr.tv" target="_blank" rel="noopener">Sonarr</a> (TV) to be downloaded automatically, and Marquee tells the person when it's ready. Both are in the ZimaOS App Store. Find each API key in their Settings → General.</p>
+      <p class="hint">Let the family ask for movies and shows. Approved requests go to <a href="https://radarr.video" target="_blank" rel="noopener">Radarr</a> (movies) and <a href="https://sonarr.tv" target="_blank" rel="noopener">Sonarr</a> (TV) to be downloaded automatically, and Marquee tells the person when it's ready. Both are in the FygoOS App Store. Find each API key in their Settings → General.</p>
       ${['radarr', 'sonarr'].map(k => `<form class="arr" data-arr="${k}"><h3 class="sub-h">${k === 'radarr' ? 'Radarr (movies)' : 'Sonarr (TV)'}</h3>
         <div class="two"><input class="input" name="url" placeholder="http://192.168.1.50:${k === 'radarr' ? 7878 : 8989}" value="${esc(set[k + 'Url'])}"><input class="input" name="key" placeholder="${set[k + 'KeySet'] ? 'API key saved — paste to replace' : 'API key'}" autocomplete="off"></div>
         <div class="btn-row" style="margin-top:8px"><button class="btn small">Save & test</button><span class="hint arr-status" style="margin:0">${set[k + 'Root'] ? `Saving to ${esc(set[k + 'Root'])}` : ''}</span></div>
@@ -331,8 +331,8 @@ function adminPanels(o) {
       <form id="lanF" class="field"><label>Home address — on your Wi-Fi (also needed for Chromecast)</label>
         <div class="btn-row" style="flex-wrap:nowrap"><input class="input" name="u" value="${esc(set.lanUrl)}" placeholder="http://192.168.1.50:8420"><button class="btn">Save</button></div></form>
       <form id="remF" class="field"><label>Away-from-home address — your Tailscale address</label>
-        <div class="btn-row" style="flex-wrap:nowrap"><input class="input" name="u" value="${esc(set.remoteUrl || '')}" placeholder="http://100.101.102.103:8420 or https://zimaos.your-name.ts.net"><button class="btn">Save</button></div>
-        <p class="hint" style="margin:6px 0 0">Find it in the Tailscale app: tap your Zima and copy its 100.x.x.x address, then add :8420. If you set up Tailscale so your home address works everywhere (a “subnet route”), leave this empty.</p></form>
+        <div class="btn-row" style="flex-wrap:nowrap"><input class="input" name="u" value="${esc(set.remoteUrl || '')}" placeholder="http://100.101.102.103:8420 or https://fygoos.your-name.ts.net"><button class="btn">Save</button></div>
+        <p class="hint" style="margin:6px 0 0">Find it in the Tailscale app: tap your FygoOS NAS and copy its 100.x.x.x address, then add :8420. If you set up Tailscale so your home address works everywhere (a “subnet route”), leave this empty.</p></form>
     </div>
 
     <div class="panel">
@@ -454,7 +454,7 @@ function libraryModal(lib, o, redraw) {
     <div class="folder-list" id="fl"></div>
     <div class="list-item" style="border:0;padding:0 0 16px"><div class="grow"><div class="t">Kids safe</div><div class="s">Kids profiles see everything in here</div></div><label class="switch"><input type="checkbox" id="lk"><span></span></label></div>
     <button class="btn primary" id="la" style="width:100%">Add this folder</button>
-    <p class="hint" style="margin-top:12px">Only folders shared with the Marquee app are visible — on ZimaOS that's anything mounted under <span class="code">/media</span> in the app settings.</p>`);
+    <p class="hint" style="margin-top:12px">Only folders shared with the Marquee app are visible — on FygoOS that's anything mounted under <span class="code">/media</span> in the app settings.</p>`);
   let type = 'movie';
   $$('[data-t]', m.el).forEach(b => b.onclick = () => {
     type = b.dataset.t;
@@ -607,7 +607,7 @@ ROUTES.duplicates = async () => {
   shell('more', `<div class="page settings"><h1 class="page-title">Duplicate finder</h1>${loading()}</div>`);
   const groups = await api('/api/admin/duplicates');
   $('#main').innerHTML = `<div class="page settings"><h1 class="page-title">Duplicate finder</h1>
-    <p class="hint">Films you have more than one copy of. Marquee already shows only the best copy in your library — these lists help you free up space. Nothing is deleted from here; remove extra files from ZimaOS Files.</p>
+    <p class="hint">Films you have more than one copy of. Marquee already shows only the best copy in your library — these lists help you free up space. Nothing is deleted from here; remove extra files from FygoOS Files.</p>
     ${groups.length ? groups.map(g => `<div class="panel"><h2>${esc(g.title)} ${g.year ? `<span style="color:var(--muted)">(${g.year})</span>` : ''}</h2><div class="list">${g.files.map(f => `<div class="list-item">
       <div class="grow"><div class="t">${f.id === g.keep ? '<span class="pill accent">Best</span>' : '<span class="pill">Extra</span>'} ${f.width}×${f.height} · ${esc((f.codec || '').toUpperCase())} · ${fmtBytes(f.size)}</div><div class="s" title="${esc(f.path)}">${esc(f.path)}</div></div></div>`).join('')}</div>
       <p class="hint" style="margin:10px 0 0">Removing the extras would free ${fmtBytes(g.files.filter(f => f.id !== g.keep).reduce((s, f) => s + (f.size || 0), 0))}.</p></div>`).join('')

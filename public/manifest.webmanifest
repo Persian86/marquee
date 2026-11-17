@@ -1,7 +1,7 @@
 {
   "name": "Marquee",
   "short_name": "Marquee",
-  "description": "Your family's movies and TV, from your ZimaOS server",
+  "description": "Your family's movies and TV, from your FygoOS server",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

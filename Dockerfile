@@ -1,7 +1,7 @@
 # ---- Stage 1: build whisper.cpp (AI subtitles) for this exact machine ----
 FROM debian:bookworm-slim AS whisper
 ARG WHISPER_VERSION=v1.7.4
-# Built on your ZimaOS box, so it can use every speed trick its processor has
+# Built on your FygoOS box, so it can use every speed trick its processor has
 ARG WHISPER_NATIVE=ON
 # If this step can't finish (no internet, unusual processor) Marquee still builds — just without AI subtitles.
 RUN apt-get update && apt-get install -y --no-install-recommends git cmake build-essential ca-certificates \
@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git cmake build
 # ---- Stage 2: Marquee ----
 FROM node:22-bookworm-slim
 
-# ffmpeg + GPU drivers for hardware transcoding (Intel on ZimaBoard / ZimaBlade / ZimaCube, AMD via mesa)
+# ffmpeg + GPU drivers for hardware transcoding (Intel on Intel-based NAS hardware, AMD via mesa)
 RUN sed -i 's/^Components: main$/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg ca-certificates tini tzdata mesa-va-drivers vainfo \

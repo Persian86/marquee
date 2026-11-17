@@ -1,7 +1,7 @@
 {
   "name": "marquee",
   "version": "1.0.0",
-  "description": "Personal media server for ZimaOS",
+  "description": "Personal media server for FygoOS",
   "main": "server/index.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/index.js",

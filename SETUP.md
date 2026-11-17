@@ -97,6 +97,20 @@ Tailscale creates a private network between your devices. Nothing is exposed to 
 
 On Android the app also switches Tailscale on for you when it's needed. On iPhone and Mac, turn on **VPN On Demand** inside the Tailscale app (Wi-Fi: *Except On* your home network; Cellular: *Always*).
 
+### Keep the NAS connected without expiry interruptions
+
+For a trusted, always-on FygoOS NAS:
+
+1. In the Tailscale admin console, open **Machines**, find this NAS, open its three-dot menu and choose **Disable key expiry**. Do this only after considering the trade-off: the NAS stays trusted until you manually revoke or remove it. Keep normal expiry on phones and laptops unless you deliberately choose otherwise.
+2. If Tailscale runs in Docker, persist its state: set **TS_STATE_DIR=/var/lib/tailscale**, mount that directory to a dedicated NAS folder, and use **TS_AUTH_ONCE=true** with **restart: unless-stopped**. Keep that folder separate from Marquee's settings and temporary files. Do not delete it when updating the container.
+3. An **auth key** is for registering the device; its expiry is different from the registered device's **key expiry**. A fresh reusable auth key on every restart is not a substitute for saved state.
+4. Save the NAS's actual Tailscale address in **Marquee → Settings → Server addresses**. A sample hostname is not your real address. Use its full MagicDNS name or its Tailscale IP with port **8420**.
+5. On your phone, sign in to the same tailnet, turn Tailscale on, switch off Wi-Fi and test Marquee over mobile data. No router port-forwarding or public Funnel is needed for your own private access.
+
+This prevents the normal NAS device-key expiry from interrupting access; it does not prevent outages, account revocation, manual logout or lost state. If a device is lost or compromised, remove it from the Tailscale admin console.
+
+Official references: [device key expiry](https://tailscale.com/docs/features/access-control/key-expiry) and [Docker configuration](https://tailscale.com/docs/features/containers/docker/docker-params).
+
 **Recommended: a proper `https://` address.** Downloads for offline, phone notifications and Chromecast all need it. In the Tailscale admin go to **DNS** and turn on **HTTPS Certificates**. Then over SSH run:
 ```
 docker exec -it $(docker ps -qf name=tailscale) tailscale serve --bg 8420

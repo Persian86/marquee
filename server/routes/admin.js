@@ -131,7 +131,7 @@ r.put('/settings', wrap(async (req, res) => {
   if (b.remoteUrl != null) {
     let u = String(b.remoteUrl).trim().replace(/\/$/, '');
     if (u && !/^https?:\/\//.test(u)) u = (/\.ts\.net/i.test(u) ? 'https://' : 'http://') + u;
-    if (u && !/^https?:\/\/[^/]+$/.test(u)) return res.status(400).json({ error: 'Use the form http://100.101.102.103:8420 or https://zimaos.your-name.ts.net' });
+    if (u && !/^https?:\/\/[^/]+$/.test(u)) return res.status(400).json({ error: 'Use the form http://100.101.102.103:8420 or https://fygoos.your-name.ts.net' });
     setSetting('remote_url', u);
   }
   if (b.holidayMode != null) {

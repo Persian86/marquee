@@ -1,5 +1,5 @@
 // Faces in photos: finds faces, groups the same person together, and lets you name them
-// ("show me every photo of Zoey"). Runs quietly in the background on the ZimaOS box.
+// ("show me every photo of Zoey"). Runs quietly in the background on the FygoOS box.
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');

@@ -70,7 +70,7 @@ admin.put('/extras', wrap(async (req, res) => {
   num('spaceSaverCrf', 'space_saver_crf', 18, 30);
   if (b.shareUrl != null) {
     const u = String(b.shareUrl).trim().replace(/\/$/, '');
-    if (u && !/^https:\/\/[^/]+$/.test(u)) return fail(res, new Error('Use the form https://zimaos.tail1234.ts.net:8443'));
+    if (u && !/^https:\/\/[^/]+$/.test(u)) return fail(res, new Error('Use the form https://fygoos.tail1234.ts.net:8443'));
     setSetting('share_url', u);
   }
   if (['original', '1080', '720', '480'].includes(b.shareQuality)) setSetting('share_quality', b.shareQuality);

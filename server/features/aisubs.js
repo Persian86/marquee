@@ -1,4 +1,4 @@
-// AI subtitles: listens to the audio with Whisper (whisper.cpp, running on your ZimaOS box — nothing is uploaded)
+// AI subtitles: listens to the audio with Whisper (whisper.cpp, running on your FygoOS box — nothing is uploaded)
 // and writes subtitles for anything that has none, like home videos. Can also translate foreign films into English.
 const fs = require('fs');
 const os = require('os');

@@ -1,5 +1,5 @@
 // Runs in its own thread so finding faces never slows down the rest of Marquee.
-// Everything happens on your ZimaOS box — no photos are sent anywhere.
+// Everything happens on your FygoOS box — no photos are sent anywhere.
 const { parentPort } = require('worker_threads');
 const { execFile } = require('child_process');
 const fs = require('fs');

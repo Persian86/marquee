@@ -1,4 +1,4 @@
-name: Build Marquee for ZimaOS
+name: Build Marquee for FygoOS
 
 on:
   workflow_dispatch:

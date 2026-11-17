@@ -274,7 +274,7 @@ async function aiSubsMenu(x, reload) {
   const r = await api(`/api/ai-subs/${target.id}`);
   const job = t => r.jobs.find(j => j.task === t);
   const label = (t, idle) => { const j = job(t); return !j ? idle : j.status === 'ready' ? `${idle} <small>Done — pick it from the subtitles menu</small>` : j.status === 'failed' ? `${idle} <small>Didn't work: ${esc(j.error || '')}</small>` : `${idle} <small>${j.status === 'working' ? `Working… ${Math.round(j.progress * 100)}%` : 'Waiting its turn'}</small>`; };
-  const m = modal(`<h2>Subtitles made by AI</h2><p class="hint">Marquee listens to the ${target.type === 'episode' ? 'episode' : 'video'} on your ZimaOS box and writes subtitles. Nothing is uploaded. It takes a while on small boxes — roughly as long as the video itself.</p>
+  const m = modal(`<h2>Subtitles made by AI</h2><p class="hint">Marquee listens to the ${target.type === 'episode' ? 'episode' : 'video'} on your FygoOS box and writes subtitles. Nothing is uploaded. It takes a while on small boxes — roughly as long as the video itself.</p>
     ${r.available ? `<div class="menu-list"><button data-t="transcribe">${ICON.pulse}<span>${label('transcribe', 'Make subtitles')}</span></button>
       <button data-t="translate">${ICON.pulse}<span>${label('translate', 'Translate into English subtitles')}</span></button></div>`
       : `<p class="hint">${me.isAdmin ? 'This server image was built without the speech engine. Rebuild Marquee with the latest files (see the setup guide).' : 'Not available on this server yet.'}</p>`}`);
@@ -410,13 +410,13 @@ async function loadExtrasPanels() {
   const kindName = { familynest: 'FamilyNest', assistant: 'Voice assistant', widget: 'Home-screen widget', device: 'Marquee app (widgets & car)' };
   el.innerHTML = `
     <div class="panel"><h2>Faces in photos</h2>
-      <p class="hint">Groups photos by who's in them so you can name people and see every photo of them. Runs on your ZimaOS box only — no photos leave the house.</p>
+      <p class="hint">Groups photos by who's in them so you can name people and see every photo of them. Runs on your FygoOS box only — no photos leave the house.</p>
       ${f.available ? `<div class="list-item"><div class="grow"><div class="t">Find faces</div><div class="s">${f.running ? `Working… ${f.done} of ${f.total} photos` : `${f.checked} of ${f.photos} photos checked · ${f.faces} faces · ${f.people} people`}${f.error ? ` · <span style="color:#ff9a87">${esc(f.error)}</span>` : ''}</div></div>${sw('xFaces', s.facesEnabled)}</div>
         <div class="btn-row" style="margin-top:10px"><a class="btn small" href="#/photo-people">${ICON.users} People</a><button class="btn small" id="xFacesRedo">Start again from scratch</button></div>`
       : '<p class="hint">Not available — rebuild Marquee with the latest files to add it.</p>'}</div>
 
     <div class="panel"><h2>Subtitles made by AI</h2>
-      <p class="hint">Listens to a video on your ZimaOS box and writes subtitles — great for home videos, or foreign films (it can translate into English). Open anything, tap ⋯ → <b>Subtitles made by AI</b>.</p>
+      <p class="hint">Listens to a video on your FygoOS box and writes subtitles — great for home videos, or foreign films (it can translate into English). Open anything, tap ⋯ → <b>Subtitles made by AI</b>.</p>
       ${a.available ? `<div class="list-item"><div class="grow"><div class="t">Accuracy</div><div class="s">${a.modelReady ? 'Ready' : 'Downloads once on first use'}${a.download ? ` · downloading ${a.download.pct}%` : ''}</div></div>
           <select class="select" id="xAiModel">${Object.entries(a.models).map(([k, m]) => `<option value="${k}" ${a.model === k ? 'selected' : ''}>${k[0].toUpperCase() + k.slice(1)} · ${m.size} — ${m.note}</option>`).join('')}</select></div>
         <div class="list-item"><div class="grow"><div class="t">Do it automatically</div><div class="s">For new videos that arrive with no subtitles at all</div></div>
@@ -460,8 +460,8 @@ async function loadExtrasPanels() {
 
     <div class="panel"><h2>Share links</h2>
       <p class="hint">Send one movie or episode to anyone — they don't need Tailscale. Share links are served on a separate port (${s.sharePort || 'off'}) that knows nothing else about Marquee, so the rest stays private.
-        To make them work from anywhere, run this once on the ZimaOS box (see the setup guide):<br><code>tailscale funnel --bg --https=8443 ${s.sharePort || 8421}</code></p>
-      <div class="field"><label>Public address for links</label><input class="input" id="xShUrl" value="${esc(s.shareUrl)}" placeholder="https://zimaos.tail1234.ts.net:8443"></div>
+        To make them work from anywhere, run this once on the FygoOS box (see the setup guide):<br><code>tailscale funnel --bg --https=8443 ${s.sharePort || 8421}</code></p>
+      <div class="field"><label>Public address for links</label><input class="input" id="xShUrl" value="${esc(s.shareUrl)}" placeholder="https://fygoos.tail1234.ts.net:8443"></div>
       <div class="list-item"><div class="grow"><div class="t">Quality for guests</div></div><select class="select" id="xShQ">${[['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['original', 'Original']].map(([k, l]) => `<option ${s.shareQuality === k ? 'selected' : ''} value="${k}">${l}</option>`).join('')}</select></div>
       <div class="btn-row"><button class="btn small primary" id="xShSave">Save</button><a class="btn small" href="#/shares">All shared links</a></div></div>
 
